@@ -1,0 +1,52 @@
+basic_configuration:
+  case_type: "ApiCase" #WebCase AppCase ApiCase
+  case_title: "login"
+  module: "login"
+  function: "login"
+
+setup_script:
+  - "context.update({'username':'hongzuo.chen@gen-x.tech'})"
+
+teardown_script:
+  - ""
+
+case_steps:
+  - login:
+      request_method: "post_request"
+      request_url: "{{URL}}/api/broker/client/auth/v2/login"
+      request_parameters: ""
+      request_headers:
+        broker-idk: "42920d3f-5f61-4004-9722-f1c3e47e98e9"
+      request_payload:
+        username: "{{username}}"
+        password: "Test123456@"
+      content_type: "json"
+      file_path: ""
+
+  - get_token:
+      request_method: "get_json_data"
+      expression: "$..token"
+      index: "0"
+      variable_name: "token"
+
+  - get_response_data:
+      request_method: "get_json_data"
+      expression: "$..error"
+      index: "0"
+      variable_name: "login_status"
+
+  - assert_response_data:
+      request_method: "assert_text_equal"
+      expected_value: "None"
+      actual_value: "{{login_status}}"
+
+#  - fetch_database_data:
+#      request_method: "fetch_database_data"
+#      database: "ecommerce_database"
+#      sql: "select clientId from user where username = 'Conversion Order'"
+#      variable_name: ""
+#
+#  - assert_database_data:
+#      request_method: "assert_text_equal"
+#      expected_value: "246"
+#      actual_value: "{{clientId_1}}"

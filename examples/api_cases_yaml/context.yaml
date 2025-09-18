@@ -1,0 +1,12 @@
+URL: https://dev-rzforex-api-2.0.gen-x.dev
+
+_database:
+  ecommerce_database:
+    host: shop-xo.hctestedu.com
+    port: 3306
+    user: api_test
+    password: Aa99999!
+    db: shopxo_hctestedu
+key_dir: ./HAT/key_dir
+
+session_reuse: True

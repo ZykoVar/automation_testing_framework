@@ -1,0 +1,46 @@
+basic_configuration:
+  case_type: "ApiCase" #WebCase AppCase ApiCase
+  case_title: "login"
+  module: "login"
+  function: "login"
+
+setup_script:
+  - ""
+
+teardown_script:
+  - ""
+
+case_steps:
+  - login:
+      request_method: "post_request"
+      request_url: "{{URL}}/api/broker/client/auth/v2/login"
+      request_parameters: ""
+      request_headers:
+        broker-idk: "42920d3f-5f61-4004-9722-f1c3e47e98e9"
+      request_payload:
+        username: "{{username}}"
+        password: "{{password}}"
+      content_type: "json"
+      file_path: ""
+
+  - get_response_data:
+      request_method: "get_json_data"
+      expression: "$..error"
+      index: "0"
+      variable_name: "login_status"
+
+  - assert_response_data:
+      request_method: "assert_text_equal"
+      expected_value: "{{expected_value}}"
+      actual_value: "{{login_status}}"
+
+ddt:
+  - scenario_title: "incorrect_username"
+    username: "hongzuo.chen"
+    password: "Test123456@"
+    expected_value: "Unauthorized"
+
+  - scenario_title: "incorrect_password"
+    username: "hongzuo.chen@gen-x.tech"
+    password: "Test12345@"
+    expected_value: "Unauthorized"
