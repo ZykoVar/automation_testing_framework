@@ -24,7 +24,7 @@ class CasesPlugin:
     def pytest_addoption(parser) -> None:
         """
         添加自定义命令行选项
-        
+
         Args:
             parser: pytest的参数解析器对象
         """
@@ -101,3 +101,12 @@ class CasesPlugin:
             except Exception as e:
                 # 如果编码处理失败，保留原始值并记录警告
                 print(f"警告: 处理测试项编码时出错 {item.name}: {str(e)}")
+
+def pytest_addoption(parser):
+    CasesPlugin.pytest_addoption(parser)
+
+def pytest_generate_tests(metafunc):
+    CasesPlugin.pytest_generate_tests(metafunc)
+
+def pytest_collection_modifyitems(items):
+    CasesPlugin.pytest_collection_modifyitems(items)

@@ -14,8 +14,6 @@ import pytest
 from allure_combine import combine_allure
 from loguru import logger
 
-from HAT.core.cases_plugin import CasesPlugin
-
 
 def setup_logging() -> str:
     """
@@ -31,7 +29,7 @@ def setup_logging() -> str:
     logger.remove()
     logger.add(sys.stdout, level="INFO")
     logger.add(os.path.join("./HAT/logs", f"{time_str}.log"), level=log_level)
-    
+
     return time_str
 
 
@@ -47,7 +45,7 @@ def get_pytest_args() -> List[str]:
     # cases_path = "./examples/api_cases_excel"
     cases_type = "yaml"
     cases_path = "./examples/api_cases_yaml"
-    
+
     args = [
         "-v",  # 详细模式，显示每个测试用例的详细信息
         "-s",  # 允许输出print语句的内容，不捕获标准输出
@@ -55,13 +53,14 @@ def get_pytest_args() -> List[str]:
         "--alluredir=allure-results",  # 指定allure测试结果的输出目录
         "--clean-alluredir",  # 清理allure结果目录
         "--tb=short",  # 显示简洁的错误追踪信息
-        "--reruns", "2",
-        "--reruns-delay", "1",
+        "--reruns", "2",  # 重新运行失败的用例两次
+        "--reruns-delay", "1",  # 运行失败的用例之间的延迟时间
+        "-n", "2",  # 并行运行测试用例
         "./HAT/core/test_runner.py",  # 指定测试运行器
         f"--cases_type={cases_type}",  # 指定用例类型
         f"--cases_path={cases_path}"  # 指定用例路径
     ]
-    
+
     return args
 
 
@@ -73,7 +72,7 @@ def generate_allure_report() -> None:
     exit_code = os.system("allure generate allure-results -o allure-report --clean")
     if exit_code != 0:
         logger.warning("Allure报告生成可能存在问题")
-    
+
     # 合并allure报告
     try:
         combine_allure("./allure-report")
@@ -88,16 +87,16 @@ def main() -> None:
     # 设置日志
     time_str = setup_logging()
     logger.info(f"开始执行测试，日志文件: ./HAT/logs/{time_str}.log")
-    
+
     # 获取测试参数
     pytest_args = get_pytest_args()
     logger.info(f"测试参数: {pytest_args}")
-    
+
     # 运行测试
     logger.info("开始运行测试用例...")
-    exit_code = pytest.main(pytest_args, plugins=[CasesPlugin()])
+    exit_code = pytest.main(pytest_args)
     logger.info(f"测试执行完成，退出码: {exit_code}")
-    
+
     # 生成报告
     logger.info("开始生成Allure测试报告...")
     generate_allure_report()

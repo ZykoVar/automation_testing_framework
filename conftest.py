@@ -1,0 +1,1 @@
+pytest_plugins = ["HAT.core.cases_plugin"]
