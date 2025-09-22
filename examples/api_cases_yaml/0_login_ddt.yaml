@@ -13,7 +13,7 @@ teardown_script:
 case_steps:
   - login:
       request_method: "post_request"
-      request_url: "{{URL}}/api/broker/client/auth/v2/login"
+      request_url: "{{url}}/api/broker/client/auth/v2/login"
       request_parameters: ""
       request_headers:
         broker-idk: "42920d3f-5f61-4004-9722-f1c3e47e98e9"

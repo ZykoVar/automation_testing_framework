@@ -13,7 +13,7 @@ teardown_script:
 case_steps:
   - get_currency_account:
       request_method: "get_request"
-      request_url: "{{URL}}/api/broker/client/v2/account/find"
+      request_url: "{{url}}/api/broker/client/v2/account/find"
       request_parameters: ""
       request_headers:
         broker-idk: "42920d3f-5f61-4004-9722-f1c3e47e98e9"

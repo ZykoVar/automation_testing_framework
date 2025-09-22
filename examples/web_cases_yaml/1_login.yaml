@@ -1,0 +1,34 @@
+basic_configuration:
+  case_type: "WebCase" #WebCase AppCase ApiCase
+  case_title: "login"
+  module: "login"
+  function: "login"
+
+setup_script:
+  - ""
+
+teardown_script:
+  - ""
+
+case_steps:
+  - access_url:
+      request_method: "open_url"
+      request_url: "{{url}}/auth/login"
+
+  - enter_account_name:
+      request_method: "input_text"
+      locating_method: "By.XPATH"
+      expression: "//input[@type='email']"
+      text: "hongzuo.chen@gen-x.tech"
+      timeout: "1"
+
+  - enter_password:
+      request_method: "input_text"
+      locating_method: "By.XPATH"
+      expression: "//input[@type='password']"
+      text: "Test123456@"
+
+  - click_login_button:
+      request_method: "click_element"
+      locating_method: "By.XPATH"
+      expression: "//button[text()='Log in']"

@@ -1,0 +1,22 @@
+basic_configuration:
+  case_type: "WebCase" #WebCase AppCase ApiCase
+  case_title: "apply_currency_account"
+  module: "currency_accounts"
+  function: "apply_currency_account"
+
+setup_script:
+  - ""
+
+teardown_script:
+  - ""
+
+case_steps:
+  - click_apply_account:
+      request_method: "click_element"
+      locating_method: "By.XPATH"
+      expression: "//button[text()='Apply account']"
+
+  - click_currency_nzd:
+      request_method: "click_element"
+      locating_method: "By.XPATH"
+      expression: "(//p[text()='NZD'])[2]"

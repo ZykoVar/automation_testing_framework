@@ -43,8 +43,10 @@ def get_pytest_args() -> List[str]:
     # 优先从环境变量获取配置
     # cases_type = "excel"
     # cases_path = "./examples/api_cases_excel"
+    # cases_type = "yaml"
+    # cases_path = "./examples/api_cases_yaml"
     cases_type = "yaml"
-    cases_path = "./examples/api_cases_yaml"
+    cases_path = "./examples/web_cases_yaml"
 
     args = [
         "-v",  # 详细模式，显示每个测试用例的详细信息
@@ -55,7 +57,7 @@ def get_pytest_args() -> List[str]:
         "--tb=short",  # 显示简洁的错误追踪信息
         "--reruns", "2",  # 重新运行失败的用例两次
         "--reruns-delay", "1",  # 运行失败的用例之间的延迟时间
-        "-n", "2",  # 并行运行测试用例
+        # "-n", "2",  # 并行运行测试用例
         "./HAT/core/test_runner.py",  # 指定测试运行器
         f"--cases_type={cases_type}",  # 指定用例类型
         f"--cases_path={cases_path}"  # 指定用例路径

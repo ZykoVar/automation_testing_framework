@@ -12,6 +12,7 @@ import allure
 from tqdm import tqdm
 
 from HAT.context.api_case_context import ApiCaseContext
+from HAT.context.web_case_context import WebCaseContext
 from HAT.core.global_context import GlobalContext
 from HAT.extend.script import run_script
 from HAT.utils.step_log_collector import allure_step_with_log
@@ -43,6 +44,10 @@ class TestRunner:
         # 根据用例类型初始化对应的关键字对象
         if basic_config.get("case_type") == "ApiCase":
             keywords = ApiCaseContext().init_keywords()
+        elif basic_config.get("case_type") == "WebCase":
+            keywords = WebCaseContext().init_keywords()
+        else:
+            raise ValueError("Invalid case type")
 
         # 设置Allure报告相关属性
         allure.dynamic.parameter("case_info", None)

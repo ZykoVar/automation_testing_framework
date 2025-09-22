@@ -1,0 +1,5 @@
+url: https://dev-rzforex-2.0.gen-x.dev
+
+key_dir: ./HAT/key_dir
+
+driver_reuse: True
