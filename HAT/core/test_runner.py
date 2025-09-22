@@ -39,15 +39,15 @@ class TestRunner:
         """
         # 获取测试用例基本配置
         basic_config = case_info.get("basic_configuration", {})
-        keywords = None
 
         # 根据用例类型初始化对应的关键字对象
-        if basic_config.get("case_type") == "ApiCase":
+        case_type = basic_config.get("case_type")
+        if case_type == "ApiCase":
             keywords = ApiCaseContext().init_keywords()
-        elif basic_config.get("case_type") == "WebCase":
+        elif case_type == "WebCase":
             keywords = WebCaseContext().init_keywords()
         else:
-            raise ValueError("Invalid case type")
+            raise ValueError(f"Invalid case type: {case_type}")
 
         # 设置Allure报告相关属性
         allure.dynamic.parameter("case_info", None)
@@ -80,7 +80,7 @@ class TestRunner:
                 step_name = list(step.keys())[0]
                 step_value = list(step.values())[0]
 
-                # 更新进度条描述和进度x
+                # 更新进度条描述和进度
                 progress_bar.set_description(f"{basic_config.get('case_title')}-当前步骤:{step_name}")
                 progress_bar.update(1)
 
@@ -97,11 +97,8 @@ class TestRunner:
                     method = step_value["request_method"]
                     try:
                         # 尝试执行内置方法
-                        if keywords is not None:
-                            request_method = keywords.__getattribute__(method)
-                            request_method(**step_value)
-                        else:
-                            raise AttributeError("Keywords not initialized")
+                        request_method = keywords.__getattribute__(method)
+                        request_method(**step_value)
                     except AttributeError:
                         # 如果内置方法不存在，尝试执行扩展方法
                         if GlobalContext().get_context("key_dir") is not None:
