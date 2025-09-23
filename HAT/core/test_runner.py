@@ -81,7 +81,7 @@ class TestRunner:
                 step_value = list(step.values())[0]
 
                 # 更新进度条描述和进度
-                progress_bar.set_description(f"{basic_config.get('case_title')}-当前步骤:{step_name}")
+                progress_bar.set_description(f"{basic_config.get('case_title')}-current_step:{step_name}")
                 progress_bar.update(1)
 
                 # 刷新上下文并处理步骤值

@@ -11,24 +11,24 @@ teardown_script:
   - ""
 
 case_steps:
-  - access_url:
+  - open_url:
       request_method: "open_url"
       request_url: "{{url}}/auth/login"
 
   - enter_account_name:
       request_method: "input_text"
-      locating_method: "By.XPATH"
-      expression: "//input[@type='email']"
+      element_position: "login"
+      element: "email_input"
       text: "hongzuo.chen@gen-x.tech"
       timeout: "1"
 
   - enter_password:
       request_method: "input_text"
-      locating_method: "By.XPATH"
-      expression: "//input[@type='password']"
+      element_position: "login"
+      element: "password_input"
       text: "Test123456@"
 
   - click_login_button:
       request_method: "click_element"
-      locating_method: "By.XPATH"
-      expression: "//button[text()='Log in']"
+      element_position: "login"
+      element: "login_button"

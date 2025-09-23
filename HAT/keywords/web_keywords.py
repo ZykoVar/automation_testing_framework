@@ -8,6 +8,7 @@ Web自动化测试关键字模块
 import sys
 from typing import Any, Optional, List
 
+import allure
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.remote.webdriver import WebDriver
@@ -82,12 +83,72 @@ class WebKeywords:
         except Exception as e:
             print(e)
 
+    @staticmethod
+    def get_locator(**kwargs: Any) -> tuple[str, str]:
+        """
+        获取元素定位器
+
+        从全局上下文中获取Web元素配置信息，并根据传入的参数构建元素定位器。
+
+        Args:
+            **kwargs: 可变关键字参数
+                element_position (str): 元素位置键名，用于在全局上下文中查找元素位置配置
+                element (str): 元素键名，用于在元素位置配置中查找具体元素信息
+
+        Returns:
+            tuple: Selenium定位器元组 (定位方式, 定位表达式)
+
+        Raises:
+            TypeError: 当_global_web_elements不是字典类型或element_position/
+                      element_position_key不是字符串类型时
+            KeyError: 当在全局上下文中找不到指定的元素位置或元素时
+
+        Example:
+            >>> element_locator = WebKeywords.get_locator(
+            ...     element_position="login_page",
+            ...     element="username_input"
+            ... )
+            >>> print(element_locator)
+            (By.ID, "username")
+        """
+        all_web_elements = GlobalContext().get_context("_all_web_elements")
+        if not isinstance(all_web_elements, dict):
+            raise TypeError(f"_all_web_elements should be a dict, but got {type(all_web_elements)}")
+
+        element_position_key = kwargs["element_position"]
+        if not isinstance(element_position_key, str):
+            raise TypeError(f"element_position should be a string, but got {type(element_position_key)}")
+
+        element_position = all_web_elements.get(element_position_key)
+        if element_position is None:
+            raise KeyError(f"Element position '{element_position_key}' not found in _all_web_elements")
+
+        if not isinstance(element_position, dict):
+            raise TypeError(f"Element position should be a dict, but got {type(element_position)}")
+
+        element_key = kwargs["element"]
+        if not isinstance(element_key, str):
+            raise TypeError(f"element should be a string, but got {type(element_key)}")
+
+        element = element_position.get(element_key)
+        if element is None:
+            raise KeyError(f"Element '{element_key}' not found in element position '{element_position_key}'")
+
+        locating_method = element["locating_method"]
+        if isinstance(locating_method, str):
+            from selenium.webdriver.common.by import By
+            locating_method = getattr(By, locating_method.split(".")[-1])
+        locator = (locating_method, element["expression"])
+        return locator
+
+    @allure.step("maximize_window")
     def maximize_window(self) -> None:
         """
         最大化浏览器窗口
         """
         self.driver.maximize_window()
 
+    @allure.step("open_url")
     def open_url(self, **kwargs: Any) -> None:
         """
         打开指定URL
@@ -105,18 +166,15 @@ class WebKeywords:
         
         Args:
             **kwargs: 可变关键字参数
-                locating_method (str): 定位方式，如 "By.XPATH"
-                expression (str): 定位表达式
+                element_position (str): 元素位置键名
+                element (str): 元素键名
                 index (int): 元素索引，默认为0
                 
         Returns:
             WebElement: 找到的元素对象
         """
-        locating_method = kwargs["locating_method"]
-        if isinstance(locating_method, str):
-            from selenium.webdriver.common.by import By
-            locating_method = getattr(By, locating_method.split(".")[-1])
-        locator = (locating_method, kwargs["expression"])
+        locator = WebKeywords.get_locator(**kwargs)
+
         element_list = self.wait_for_all_elements_visibility(locator)
         if len(element_list) == 1:
             return element_list[0]
@@ -130,20 +188,17 @@ class WebKeywords:
         
         Args:
             **kwargs: 可变关键字参数
-                locating_method (str): 定位方式，如 "By.XPATH"
-                expression (str): 定位表达式
+                element_position (str): 元素位置键名
+                element (str): 元素键名
                 
         Returns:
             WebElement: 可点击的元素对象
         """
-        locating_method = kwargs["locating_method"]
-        if isinstance(locating_method, str):
-            from selenium.webdriver.common.by import By
-            locating_method = getattr(By, locating_method.split(".")[-1])
-        locator = (locating_method, kwargs["expression"])
+        locator = WebKeywords.get_locator(**kwargs)
         return self.wait_for_element_clickable(locator)
 
-    def click_element(self, **kwargs: Any) -> None :
+    @allure.step("click_element")
+    def click_element(self, **kwargs: Any) -> None:
         """
         点击元素
         
@@ -154,6 +209,7 @@ class WebKeywords:
         """
         self.find_element_clickable(**kwargs).click()
 
+    @allure.step("input_text")
     def input_text(self, **kwargs: Any) -> None:
         """
         在元素中输入文本
@@ -166,6 +222,7 @@ class WebKeywords:
         """
         self.find_element_visibility(**kwargs).send_keys(kwargs["text"])
 
+    @allure.step("get_screenshot")
     def get_screenshot(self, **kwargs: Any) -> None:
         """
         获取屏幕截图（待实现）
@@ -175,12 +232,14 @@ class WebKeywords:
         """
         pass
 
+    @allure.step("quit")
     def quit(self):
         """
         关闭WebDriver会话
         """
         self.driver.quit()
 
+    @allure.step("ex_invoke")
     def ex_invoke(self, **kwargs: Any) -> None:
         """
         执行扩展方法

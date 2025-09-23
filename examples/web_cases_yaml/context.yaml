@@ -1,3 +1,23 @@
+_all_web_elements:
+  login: # element_position
+    email_input: # element
+      locating_method: "By.XPATH"
+      expression: "//input[@type='email']"
+    password_input:
+      locating_method: "By.XPATH"
+      expression: "//input[@type='password']"
+    login_button:
+      locating_method: "By.XPATH"
+      expression: "//button[text()='Log in']"
+  home:
+    apply_account_button:
+      locating_method: "By.XPATH"
+      expression: "//button[text()='Apply account']"
+  apply_for_collecting_accounts:
+    currency_button:
+      locating_method: "By.XPATH"
+      expression: "(//p[text()='NZD'])[2]"
+
 url: https://dev-rzforex-2.0.gen-x.dev
 
 key_dir: ./HAT/key_dir
