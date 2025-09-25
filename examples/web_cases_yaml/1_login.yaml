@@ -5,7 +5,7 @@ basic_configuration:
   function: "login"
 
 setup_script:
-  - ""
+  - "context.update({'email': 'hongzuo.chen@gen-x.tech', 'password': 'Test123456@'})"
 
 teardown_script:
   - ""
@@ -19,14 +19,14 @@ case_steps:
       request_method: "input_text"
       element_position: "login"
       element: "email_input"
-      text: "hongzuo.chen@gen-x.tech"
+      text: "{{email}}"
       timeout: "1"
 
   - enter_password:
       request_method: "input_text"
       element_position: "login"
       element: "password_input"
-      text: "Test123456@"
+      text: "{{password}}"
 
   - click_login_button:
       request_method: "click_element"
