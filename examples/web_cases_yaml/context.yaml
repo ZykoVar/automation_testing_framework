@@ -1,3 +1,27 @@
+url: "https://dev-rzforex-2.0.gen-x.dev"
+
+key_dir: "./HAT/key_dir"
+
+driver_reuse: True
+
+_browser_config:
+  grid_url: "" # 远程地址 grid 分布式运行
+  driver_path: "/opt/homebrew/bin/chromedriver" # 驱动地址
+  capability:
+    "browser_name": "chrome"
+  options:
+    args:
+      - "--incognito"
+
+#_browser_config:
+#  grid_url: "" # 远程地址 grid 分布式运行
+#  driver_path: "/usr/local/bin/geckodriver" # 驱动地址
+#  capability:
+#    browser_name: "firefox"
+#  options:
+#    args:
+#      - "--incognito"
+
 _all_web_elements:
   login: # element_position
     email_input: # element
@@ -17,9 +41,3 @@ _all_web_elements:
     currency_button:
       locating_method: "By.XPATH"
       expression: "(//p[text()='NZD'])[2]"
-
-url: https://dev-rzforex-2.0.gen-x.dev
-
-key_dir: ./HAT/key_dir
-
-driver_reuse: True
