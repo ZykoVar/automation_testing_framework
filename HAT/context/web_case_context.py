@@ -8,15 +8,15 @@ import atexit
 from typing import Optional
 
 from selenium import webdriver
-from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver import DesiredCapabilities
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.chrome.service import Service as Chrome_Service
+from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions, Options
 from selenium.webdriver.firefox.service import Service as Firefox_Service
 from selenium.webdriver.ie.options import Options as IeOptions
 from selenium.webdriver.ie.service import Service as Ie_Service
-from selenium.webdriver.chrome.options import Options
 
 from HAT.core.global_context import GlobalContext
 from HAT.keywords.api_keywords import ApiKeywords
