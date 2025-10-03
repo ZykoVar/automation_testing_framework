@@ -33,10 +33,16 @@ _all_web_elements:
     login_button:
       locating_method: "By.XPATH"
       expression: "//button[text()='Log in']"
+    login_error_message:
+      locating_method: "By.XPATH"
+      expression: "//div[text()='Email or password not correct']"
   home:
     apply_account_button:
       locating_method: "By.XPATH"
       expression: "//button[text()='Apply account']"
+    home_button:
+      locating_method: "By.XPATH"
+      expression: "//p[text()='Home']"
   apply_for_collecting_accounts:
     currency_button:
       locating_method: "By.XPATH"

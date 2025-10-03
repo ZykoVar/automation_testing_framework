@@ -5,7 +5,7 @@ basic_configuration:
   function: "login"
 
 setup_script:
-  - "context.update({'email': 'hongzuo.chen@gen-x.tech', 'password': 'Test123456@'})"
+  - ""
 
 teardown_script:
   - ""
@@ -32,3 +32,30 @@ case_steps:
       request_method: "click_element"
       element_position: "login"
       element: "login_button"
+
+  - get_element_data:
+      request_method: "get_element_data"
+      element_position: "{{element_position}}"
+      element: "{{element}}"
+      variable_name: "home_button"
+
+  - assert_data:
+      request_method: "assert_text_equal"
+      expected_value: "{{expected_value}}"
+      actual_value: "{{home_button}}"
+      error_message: ""
+
+ddt:
+  - scenario_title: "incorrect_username"
+    email: "hongzuo.chen@gen-x.tec"
+    password: "Test123456@"
+    element_position: "login"
+    element: "login_error_message"
+    expected_value: "Email or password not correct"
+
+  - scenario_title: "correct_email_and_password"
+    email: "hongzuo.chen@gen-x.tech"
+    password: "Test123456@"
+    element_position: "home"
+    element: "home_button"
+    expected_value: "Home"

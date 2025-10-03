@@ -6,7 +6,8 @@ Web自动化测试关键字模块
 """
 
 import sys
-from typing import Any, Optional, List
+from base64 import b64decode
+from typing import Any, Optional, List, Dict, Callable
 
 import allure
 from selenium.webdriver.support.wait import WebDriverWait
@@ -159,6 +160,7 @@ class WebKeywords:
         """
         self.driver.get(kwargs["request_url"])
         self.maximize_window()
+        self.get_screenshot()
 
     def find_element_visibility(self, **kwargs: Any) -> WebElement:
         """
@@ -208,6 +210,7 @@ class WebKeywords:
                 expression (str): 定位表达式
         """
         self.find_element_clickable(**kwargs).click()
+        self.get_screenshot()
 
     @allure.step("input_text")
     def input_text(self, **kwargs: Any) -> None:
@@ -221,16 +224,15 @@ class WebKeywords:
                 text (str): 要输入的文本
         """
         self.find_element_visibility(**kwargs).send_keys(kwargs["text"])
+        self.get_screenshot()
 
     @allure.step("get_screenshot")
-    def get_screenshot(self, **kwargs: Any) -> None:
+    def get_screenshot(self) -> None:
         """
-        获取屏幕截图（待实现）
-        
-        Args:
-            **kwargs: 截图相关参数
+        获取屏幕截图
         """
-        pass
+        img_base64 = self.driver.get_screenshot_as_base64()
+        allure.attach(b64decode(img_base64.encode("ascii")), "screenshot", allure.attachment_type.PNG)
 
     @allure.step("quit")
     def quit(self):
@@ -238,6 +240,183 @@ class WebKeywords:
         关闭WebDriver会话
         """
         self.driver.quit()
+
+    @allure.step("get_element_data")
+    def get_element_data(self, **kwargs: Any) -> None:
+        """
+        获取数据
+
+        Args:
+            **kwargs: 获取数据相关参数
+        """
+        try:
+            result = self.find_element_visibility(**kwargs).text
+            if not result:
+                raise Exception(
+                    f"No data found in element position: "
+                    f"{kwargs.get('element_position')} {kwargs.get('element')}"
+                )
+            GlobalContext().set_context(kwargs["variable_name"], result)
+        except Exception as e:
+            raise Exception(f"Failed to extract JSON data: {str(e)}")
+
+    @allure.step("assert_data")
+    def assert_data(self, **kwargs: Any) -> None:
+        """
+        数据断言
+
+        支持多种比较操作符的数据断言方法
+
+        Args:
+            **kwargs: 包含actual_value(实际值)、expected_value(期望值)、
+                     comparison_operator(比较操作符)等参数
+        """
+        # 定义比较操作符字典
+        comparators: Dict[str, Callable[[Any, Any], bool]] = {
+            ">": lambda x, y: x > y,
+            "<": lambda x, y: x < y,
+            "==": lambda x, y: x == y,
+            ">=": lambda x, y: x >= y,
+            "<=": lambda x, y: x <= y,
+            "!=": lambda x, y: x != y,
+            "in": lambda x, y: y in x,
+            "not in": lambda x, y: y not in x,
+        }
+        error_msg = kwargs.get("error_message", None)
+        compare_type = kwargs.get("compare_type", "text")
+        comparison_operator = kwargs.get("comparison_operator", "==")
+
+        # 检查比较操作符是否有效
+        if comparison_operator not in comparators:
+            raise ValueError(f"Invalid comparison operator: {comparison_operator}")
+
+        # 根据比较类型转换期望值
+        expected_value = kwargs.get("expected_value")
+        if compare_type == "number":
+            try:
+                expected_value = float(expected_value)
+            except (ValueError, TypeError):
+                raise ValueError(f"Cannot convert '{expected_value}' to number for comparison")
+        else:
+            expected_value = str(expected_value) if expected_value is not None else ""
+
+        actual_value = kwargs.get("actual_value", "")
+
+        # 执行断言
+        if not comparators[comparison_operator](actual_value, expected_value):
+            if error_msg:
+                raise AssertionError(error_msg)
+            else:
+                raise AssertionError(
+                    f"Assertion failed: {actual_value} {comparison_operator} {expected_value} is False")
+
+    @allure.step("assert_text_equal")
+    def assert_text_equal(self, **kwargs: Any) -> None:
+        """
+        文本相等断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为相等
+        kwargs.update({"comparison_operator": "=="})
+        self.assert_data(**kwargs)
+
+    @allure.step("assert_text_contain")
+    def assert_text_contain(self, **kwargs: Any) -> None:
+        """
+        文本包含断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为包含
+        kwargs.update({"comparison_operator": "in"})
+        self.assert_data(**kwargs)
+
+    @allure.step("assert_text_not_contain")
+    def assert_text_not_contain(self, **kwargs: Any) -> None:
+        """
+        文本不包含断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为不包含
+        kwargs.update({"comparison_operator": "not in"})
+        self.assert_data(**kwargs)
+
+    @allure.step("assert_number_ge")
+    def assert_number_ge(self, **kwargs: Any) -> None:
+        """
+        数字大于等于断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为大于等于，并指定比较类型为数字
+        kwargs.update({"comparison_operator": ">=", "compare_type": "number"})
+        self.assert_data(**kwargs)
+
+    @allure.step("assert_number_le")
+    def assert_number_le(self, **kwargs: Any) -> None:
+        """
+        数字小于等于断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为小于等于，并指定比较类型为数字
+        kwargs.update({"comparison_operator": "<=", "compare_type": "number"})
+        self.assert_data(**kwargs)
+
+    @allure.step("assert_number_equal")
+    def assert_number_equal(self, **kwargs: Any) -> None:
+        """
+        数字相等断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为相等，并指定比较类型为数字
+        kwargs.update({"comparison_operator": "==", "compare_type": "number"})
+        self.assert_data(**kwargs)
+
+    @allure.step("assert_number_not_equal")
+    def assert_number_not_equal(self, **kwargs: Any) -> None:
+        """
+        数字不相等断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为不相等，并指定比较类型为数字
+        kwargs.update({"comparison_operator": "!=", "compare_type": "number"})
+        self.assert_data(**kwargs)
+
+    @allure.step("assert_number_gt")
+    def assert_number_gt(self, **kwargs: Any) -> None:
+        """
+        数字大于断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为大于，并指定比较类型为数字
+        kwargs.update({"comparison_operator": ">", "compare_type": "number"})
+        self.assert_data(**kwargs)
+
+    @allure.step("assert_number_lt")
+    def assert_number_lt(self, **kwargs: Any) -> None:
+        """
+        数字小于断言
+
+        Args:
+            **kwargs: 断言参数
+        """
+        # 设置比较操作符为小于，并指定比较类型为数字
+        kwargs.update({"comparison_operator": "<", "compare_type": "number"})
+        self.assert_data(**kwargs)
 
     @allure.step("ex_invoke")
     def ex_invoke(self, **kwargs: Any) -> None:

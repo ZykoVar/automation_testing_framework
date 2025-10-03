@@ -55,8 +55,8 @@ def get_pytest_args() -> List[str]:
         "--alluredir=allure-results",  # 指定allure测试结果的输出目录
         "--clean-alluredir",  # 清理allure结果目录
         "--tb=short",  # 显示简洁的错误追踪信息
-        "--reruns", "2",  # 重新运行失败的用例两次
-        "--reruns-delay", "1",  # 运行失败的用例之间的延迟时间
+        # "--reruns", "2",  # 重新运行失败的用例两次
+        # "--reruns-delay", "1",  # 运行失败的用例之间的延迟时间
         # "-n", "2",  # 并行运行测试用例
         "./HAT/core/test_runner.py",  # 指定测试运行器
         f"--cases_type={cases_type}",  # 指定用例类型
