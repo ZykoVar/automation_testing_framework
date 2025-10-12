@@ -10,6 +10,9 @@ from base64 import b64decode
 from typing import Any, Optional, List, Dict, Callable
 
 import allure
+import pymysql
+from loguru import logger
+from pymysql import cursors
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.remote.webdriver import WebDriver
@@ -84,8 +87,7 @@ class WebKeywords:
         except Exception as e:
             print(e)
 
-    @staticmethod
-    def get_locator(**kwargs: Any) -> tuple[str, str]:
+    def get_locator(self, **kwargs: Any) -> tuple[str, str]:
         """
         获取元素定位器
 
@@ -105,7 +107,7 @@ class WebKeywords:
             KeyError: 当在全局上下文中找不到指定的元素位置或元素时
 
         Example:
-            >>> element_locator = WebKeywords.get_locator(
+            >>> element_locator = self.get_locator(
             ...     element_position="login_page",
             ...     element="username_input"
             ... )
@@ -140,6 +142,7 @@ class WebKeywords:
             from selenium.webdriver.common.by import By
             locating_method = getattr(By, locating_method.split(".")[-1])
         locator = (locating_method, element["expression"])
+        self.show_log("get_locator", locator)
         return locator
 
     @allure.step("maximize_window")
@@ -148,6 +151,7 @@ class WebKeywords:
         最大化浏览器窗口
         """
         self.driver.maximize_window()
+        self.show_log("maximize_window")
 
     @allure.step("open_url")
     def open_url(self, **kwargs: Any) -> None:
@@ -159,6 +163,7 @@ class WebKeywords:
                 request_url (str): 要打开的URL地址
         """
         self.driver.get(kwargs["request_url"])
+        self.show_log("open_url", kwargs["request_url"])
         self.maximize_window()
         self.get_screenshot()
 
@@ -175,7 +180,7 @@ class WebKeywords:
         Returns:
             WebElement: 找到的元素对象
         """
-        locator = WebKeywords.get_locator(**kwargs)
+        locator = self.get_locator(**kwargs)
 
         element_list = self.wait_for_all_elements_visibility(locator)
         if len(element_list) == 1:
@@ -196,7 +201,7 @@ class WebKeywords:
         Returns:
             WebElement: 可点击的元素对象
         """
-        locator = WebKeywords.get_locator(**kwargs)
+        locator = self.get_locator(**kwargs)
         return self.wait_for_element_clickable(locator)
 
     @allure.step("click_element")
@@ -210,6 +215,7 @@ class WebKeywords:
                 expression (str): 定位表达式
         """
         self.find_element_clickable(**kwargs).click()
+        self.show_log("click_element")
         self.get_screenshot()
 
     @allure.step("input_text")
@@ -224,6 +230,7 @@ class WebKeywords:
                 text (str): 要输入的文本
         """
         self.find_element_visibility(**kwargs).send_keys(kwargs["text"])
+        self.show_log("input_text", kwargs["text"])
         self.get_screenshot()
 
     @allure.step("get_screenshot")
@@ -233,6 +240,7 @@ class WebKeywords:
         """
         img_base64 = self.driver.get_screenshot_as_base64()
         allure.attach(b64decode(img_base64.encode("ascii")), "screenshot", allure.attachment_type.PNG)
+        self.show_log("get_screenshot")
 
     @allure.step("quit")
     def quit(self):
@@ -240,6 +248,7 @@ class WebKeywords:
         关闭WebDriver会话
         """
         self.driver.quit()
+        self.show_log("quit")
 
     @allure.step("get_element_data")
     def get_element_data(self, **kwargs: Any) -> None:
@@ -256,6 +265,7 @@ class WebKeywords:
                     f"No data found in element position: "
                     f"{kwargs.get('element_position')} {kwargs.get('element')}"
                 )
+            self.show_log("get_element_data", result)
             GlobalContext().set_context(kwargs["variable_name"], result)
         except Exception as e:
             raise Exception(f"Failed to extract JSON data: {str(e)}")
@@ -321,6 +331,7 @@ class WebKeywords:
         # 设置比较操作符为相等
         kwargs.update({"comparison_operator": "=="})
         self.assert_data(**kwargs)
+        self.show_log("assert_text_equal", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_text_contain")
     def assert_text_contain(self, **kwargs: Any) -> None:
@@ -333,6 +344,7 @@ class WebKeywords:
         # 设置比较操作符为包含
         kwargs.update({"comparison_operator": "in"})
         self.assert_data(**kwargs)
+        self.show_log("assert_text_contain", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_text_not_contain")
     def assert_text_not_contain(self, **kwargs: Any) -> None:
@@ -345,6 +357,7 @@ class WebKeywords:
         # 设置比较操作符为不包含
         kwargs.update({"comparison_operator": "not in"})
         self.assert_data(**kwargs)
+        self.show_log("assert_text_not_contain", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_ge")
     def assert_number_ge(self, **kwargs: Any) -> None:
@@ -357,6 +370,7 @@ class WebKeywords:
         # 设置比较操作符为大于等于，并指定比较类型为数字
         kwargs.update({"comparison_operator": ">=", "compare_type": "number"})
         self.assert_data(**kwargs)
+        self.show_log("assert_number_ge", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_le")
     def assert_number_le(self, **kwargs: Any) -> None:
@@ -369,6 +383,7 @@ class WebKeywords:
         # 设置比较操作符为小于等于，并指定比较类型为数字
         kwargs.update({"comparison_operator": "<=", "compare_type": "number"})
         self.assert_data(**kwargs)
+        self.show_log("assert_number_le", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_equal")
     def assert_number_equal(self, **kwargs: Any) -> None:
@@ -381,6 +396,7 @@ class WebKeywords:
         # 设置比较操作符为相等，并指定比较类型为数字
         kwargs.update({"comparison_operator": "==", "compare_type": "number"})
         self.assert_data(**kwargs)
+        self.show_log("assert_number_equal", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_not_equal")
     def assert_number_not_equal(self, **kwargs: Any) -> None:
@@ -393,6 +409,7 @@ class WebKeywords:
         # 设置比较操作符为不相等，并指定比较类型为数字
         kwargs.update({"comparison_operator": "!=", "compare_type": "number"})
         self.assert_data(**kwargs)
+        self.show_log("assert_number_not_equal", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_gt")
     def assert_number_gt(self, **kwargs: Any) -> None:
@@ -405,6 +422,7 @@ class WebKeywords:
         # 设置比较操作符为大于，并指定比较类型为数字
         kwargs.update({"comparison_operator": ">", "compare_type": "number"})
         self.assert_data(**kwargs)
+        self.show_log("assert_number_gt", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_lt")
     def assert_number_lt(self, **kwargs: Any) -> None:
@@ -417,6 +435,63 @@ class WebKeywords:
         # 设置比较操作符为小于，并指定比较类型为数字
         kwargs.update({"comparison_operator": "<", "compare_type": "number"})
         self.assert_data(**kwargs)
+        self.show_log("assert_number_lt", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
+
+    @allure.step("fetch_database_data")
+    def fetch_database_data(self, **kwargs: Any) -> None:
+        """
+        从数据库获取数据
+
+        Args:
+            **kwargs: 包含database(数据库配置名)、sql(SQL语句)、variable_name(变量名列表)等参数
+        """
+        # 获取数据库配置并建立连接
+        db_config = GlobalContext().get_context("_database")[kwargs["database"]]
+        config = {"cursorclass": cursors.DictCursor}
+        config.update(db_config)
+        database_connection = pymysql.connect(**config)
+        cursor = database_connection.cursor()
+        # 执行SQL查询
+        cursor.execute(kwargs["sql"])
+        query_result = cursor.fetchall()
+        cursor.close()
+        database_connection.close()
+
+        # 处理查询结果
+        result_dict = {}
+        var_names = kwargs.get("variable_name", [])
+        if not var_names:
+            # 如果没有指定变量名，则使用默认命名方式
+            for index, item in enumerate(query_result, start=1):
+                if isinstance(item, dict):
+                    for key, value in item.items():
+                        result_dict[f"{key}_{index}"] = value
+                else:
+                    result_dict[f"{index}"] = item
+        else:
+            # 如果指定了变量名，则使用指定的命名方式
+            field_length = len(query_result[0]) if query_result else 0
+            if len(var_names) != field_length:
+                raise Exception(
+                    f"The number of variable names [{var_names}] does not match the number of fields [{field_length}]")
+            for index, item in enumerate(query_result, start=1):
+                for col_index, key in enumerate(item):
+                    result_dict[f"{var_names[col_index]}_{index}"] = item[key]
+        GlobalContext().set_by_dict(result_dict)
+        self.show_log("fetch_database_data", result_dict)
+
+    @allure.step("show_log")
+    def show_log(self, data_name: str, data: Any = None) -> None:
+        """
+        记录日志信息
+
+        Args:
+            data_name: 数据名称
+            data: 要记录的数据
+        """
+        logger.debug(f"----------Log:{data_name}----------")
+        logger.debug(f"{data_name}:{data}")
+        logger.debug(f"----------End log:{data_name}------")
 
     @allure.step("ex_invoke")
     def ex_invoke(self, **kwargs: Any) -> None:

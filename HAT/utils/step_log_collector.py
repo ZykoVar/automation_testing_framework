@@ -4,7 +4,6 @@
 该模块提供了在Allure测试报告中收集和展示步骤日志的功能。
 通过捕获测试步骤执行过程中的日志信息，并将其作为附件添加到Allure报告中。
 """
-
 import io
 from contextlib import contextmanager
 from typing import Any, Optional
@@ -58,10 +57,10 @@ class StepLogCollector:
         # 移除日志处理器
         if self.sink_id is not None:
             logger.remove(self.sink_id)
-            
+
         # 获取日志内容
         log_content = self.log_buffer.getvalue()
-        
+
         # 如果有日志内容，则添加到Allure报告中
         if log_content.strip():
             allure.attach(
@@ -69,7 +68,7 @@ class StepLogCollector:
                 name="Step Log",
                 attachment_type=allure.attachment_type.TEXT
             )
-            
+
         # 关闭缓冲区
         self.log_buffer.close()
 

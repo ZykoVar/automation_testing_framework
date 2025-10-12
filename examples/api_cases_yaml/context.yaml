@@ -7,6 +7,7 @@ _database:
     user: api_test
     password: Aa99999!
     db: shopxo_hctestedu
+
 key_dir: ./HAT/key_dir
 
 session_reuse: True
