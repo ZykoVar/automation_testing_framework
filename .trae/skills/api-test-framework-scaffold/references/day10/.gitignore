@@ -1,0 +1,25 @@
+# 大模型配置（API Key）—— 绝对不能提交到 git
+# 这里存着 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL
+.env
+
+# 诊断报告（含大模型返回的代码片段，按需提交）
+# 取消下面这行的注释即可把报告纳入版本管理
+# ai_debug_reports/
+
+# AI 诊断报告目录。用例失败时自动生成，按用例名覆盖
+ai_debug_reports/
+
+# Allure 报告产物（体积大且每次都会重新生成）
+report/allure-results/
+report/allure-report/
+
+# Python 缓存
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 编辑器与系统文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

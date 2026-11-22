@@ -1,0 +1,132 @@
+# ============================================================================
+# day10 / data / yaml_data / create_subject.yaml
+#
+# 新增学科接口的 YAML 驱动用例数据。
+#
+# 被测接口：POST /api/v1/subjects/   （接口文档 http://localhost:8000/docs 中 tag 为「学科管理」的接口）
+# 请求体：SubjectCreate
+#     code        字符串  必填  长度 1~20   学科代码，如 MATH、CHINESE
+#     name        字符串  必填  长度 1~50   学科名称
+#     full_score  整数    选填  取值 1~300  满分值，默认 150
+#     pass_score  整数    选填  取值 0~300  及格分数，默认 60
+#     sort_order  整数    选填  无边界      排序顺序，默认 0
+# 鉴权：Bearer Token（由 test_subject_flow.py 在运行时从 auth_http_client 夹具取，
+#       因此不写在本文件里，token 每次登录都会变，写死会失效）
+#
+# ${SUBJECT_CODE} 是 yaml_loader 的变量占位符：
+#     学科代码在库里唯一，固定值第二次执行就会撞「学科编码已存在」，
+#     所以用占位符 + 运行前生成的唯一代码，既能正常创建又不会脏库。
+#
+# 实测结论（断言以此为准）：
+#     201 学科创建成功，data 为学科详情
+#     422 参数校验失败，code=VALIDATION_ERROR，message=数据验证失败，
+#         detail 里给出字段位置与原因（missing / string_too_long / less_than_equal / greater_than_equal）
+# ============================================================================
+
+module: 学科管理模块
+interface: create_subject
+name: 新增学科
+method: POST
+path: /api/v1/subjects/
+base_url: ${BASE_URL}
+headers:
+  Content-Type: application/json
+
+cases:
+  # ---------------------------------------------------------------------------
+  # 正常用例
+  # ---------------------------------------------------------------------------
+  - case_id: create_subject001
+    case_name: 新增学科成功-提交合法参数
+    story: 新增学科
+    json_body:
+      code: ${SUBJECT_CODE}
+      name: 自动化测试学科
+      full_score: 150
+      pass_score: 90
+      sort_order: 50
+    expect_status: 201
+    expect_message: 学科创建成功
+    expect_json:
+      "$.message": 学科创建成功
+      "$.data.code": ${SUBJECT_CODE}
+      "$.data.name": 自动化测试学科
+      "$.data.full_score": 150
+      "$.data.pass_score": 90
+      "$.data.sort_order": 50
+      "$.data.is_active": true
+
+  # ---------------------------------------------------------------------------
+  # 异常用例 1：必填字段缺失（code 不传）
+  # 实测：422 / VALIDATION_ERROR / 数据验证失败，detail[0].type=missing
+  # ---------------------------------------------------------------------------
+  - case_id: create_subject002
+    case_name: 新增学科失败-必填字段code缺失
+    story: 参数校验异常
+    json_body:
+      name: 缺少代码的学科
+    expect_status: 422
+    expect_message: 数据验证失败
+    expect_json:
+      "$.code": VALIDATION_ERROR
+      "$.detail[0].type": missing
+      "$.detail[0].loc[1]": code
+
+  # ---------------------------------------------------------------------------
+  # 异常用例 2：数值越界（full_score 超出上限 300）
+  # 实测：422 / VALIDATION_ERROR / 数据验证失败，detail[0].type=less_than_equal
+  # ---------------------------------------------------------------------------
+  - case_id: create_subject003
+    case_name: 新增学科失败-满分值超出上限
+    story: 参数校验异常
+    json_body:
+      code: ${SUBJECT_CODE}
+      name: 满分越界的学科
+      full_score: 301
+    expect_status: 422
+    expect_message: 数据验证失败
+    expect_json:
+      "$.code": VALIDATION_ERROR
+      "$.detail[0].type": less_than_equal
+      "$.detail[0].loc[1]": full_score
+      "$.detail[0].ctx.le": 300
+
+  # ---------------------------------------------------------------------------
+  # 异常用例 3：数值越界（pass_score 小于下限 0）
+  # 实测：422 / VALIDATION_ERROR / 数据验证失败，detail[0].type=greater_than_equal
+  # ---------------------------------------------------------------------------
+  - case_id: create_subject004
+    case_name: 新增学科失败-及格分低于下限
+    story: 参数校验异常
+    json_body:
+      code: ${SUBJECT_CODE}
+      name: 及格分越界的学科
+      full_score: 150
+      pass_score: -1
+    expect_status: 422
+    expect_message: 数据验证失败
+    expect_json:
+      "$.code": VALIDATION_ERROR
+      "$.detail[0].type": greater_than_equal
+      "$.detail[0].loc[1]": pass_score
+      "$.detail[0].ctx.ge": 0
+
+  # ---------------------------------------------------------------------------
+  # 异常用例 4：字符串超长（code 超过 20 个字符）
+  # 实测：422 / VALIDATION_ERROR / 数据验证失败，detail[0].type=string_too_long
+  # ---------------------------------------------------------------------------
+  - case_id: create_subject005
+    case_name: 新增学科失败-学科编码超过二十个字符
+    story: 参数校验异常
+    json_body:
+      code: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      name: 编码超长的学科
+      full_score: 150
+      pass_score: 90
+    expect_status: 422
+    expect_message: 数据验证失败
+    expect_json:
+      "$.code": VALIDATION_ERROR
+      "$.detail[0].type": string_too_long
+      "$.detail[0].loc[1]": code
+      "$.detail[0].ctx.max_length": 20

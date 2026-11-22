@@ -14,22 +14,23 @@ HAT（Hybrid Automation Testing Framework）是一个基于 Python 与 pytest �
 - 支持 HTTP Session 和 WebDriver 会话复用；
 - 支持 JSONPath 响应提取和数据库结果校验；
 - 支持自定义关键字扩展；
+- 支持 AI 自然语言断言与失败自动诊断（可选，未配置大模型 Key 时自动降级为本地规则引擎）；
 - 集成 Loguru、tqdm 和 Allure，提供日志、进度、步骤及截图附件；
 - API 与 Web 用例使用统一执行模型，便于继续扩展新的测试类型。
 
 ## 技术栈
 
-| 分类 | 技术 |
-|---|---|
-| 编程语言 | Python 3 |
-| 测试框架 | pytest |
-| API 测试 | requests、jsonpath |
-| Web 测试 | Selenium |
-| 数据解析 | PyYAML、pandas |
-| 数据库 | PyMySQL |
-| 模板渲染 | Jinja2 |
-| 日志与进度 | Loguru、tqdm |
-| 测试报告 | Allure、allure-combine |
+| 分类       | 技术                   |
+| ---------- | ---------------------- |
+| 编程语言   | Python 3               |
+| 测试框架   | pytest                 |
+| API 测试   | requests、jsonpath     |
+| Web 测试   | Selenium               |
+| 数据解析   | PyYAML、pandas         |
+| 数据库     | PyMySQL                |
+| 模板渲染   | Jinja2                 |
+| 日志与进度 | Loguru、tqdm           |
+| 测试报告   | Allure、allure-combine |
 
 ## 系统架构
 
@@ -83,6 +84,11 @@ flowchart LR
 │  │  ├─ api_keywords.py           # API、断言及数据库关键字
 │  │  └─ web_keywords.py           # Web、断言及数据库关键字
 │  ├─ extend/script/run_script.py  # 前置与后置脚本支持
+│  ├─ ai/
+│  │  ├─ ai_prompts.py             # AI 提示词与报告模板
+│  │  ├─ ai_debug_helper.py        # 大模型调用与本地规则引擎降级
+│  │  ├─ ai_assert.py              # 自然语言断言
+│  │  └─ ai_debug_plugin.py        # 用例失败自动诊断的 pytest 钩子
 │  ├─ key_dir/                     # 自定义关键字目录
 │  └─ utils/
 │     ├─ var_render.py             # Jinja2 变量渲染
@@ -228,12 +234,12 @@ case_steps:
 
 ### 基础配置字段
 
-| 字段 | 说明 |
-|---|---|
-| `case_type` | 用例类型，目前支持 `ApiCase`、`WebCase` |
+| 字段           | 说明                                        |
+| -------------- | ------------------------------------------- |
+| `case_type`  | 用例类型，目前支持 `ApiCase`、`WebCase` |
 | `case_title` | 用例名称，同时用于 pytest ID 和 Allure 标题 |
-| `module` | 所属模块，对应 Allure feature |
-| `function` | 业务功能，对应 Allure story |
+| `module`     | 所属模块，对应 Allure feature               |
+| `function`   | 业务功能，对应 Allure story                 |
 
 ### 步骤字段
 
@@ -325,10 +331,10 @@ _all_web_elements:
 
 Excel 用例目录使用 `context.xlsx`，包含以下工作表：
 
-| 工作表 | 作用 |
-|---|---|
-| `general_configuration` | 通用键值配置，如 `case_type`、URL、复用开关 |
-| `database_configuration` | 数据库别名、主机、端口、用户及数据库名 |
+| 工作表                     | 作用                                          |
+| -------------------------- | --------------------------------------------- |
+| `general_configuration`  | 通用键值配置，如 `case_type`、URL、复用开关 |
+| `database_configuration` | 数据库别名、主机、端口、用户及数据库名        |
 
 ## Excel 用例规范
 
@@ -341,17 +347,17 @@ Excel 用例文件名需要以数字开头，例如：
 
 框架按照数字前缀升序加载文件。第一张工作表的核心列如下：
 
-| 列名 | 说明 |
-|---|---|
-| `case_number` | 用例编号，可用于阅读和维护 |
-| `module` | 业务模块 |
-| `function` | 业务功能 |
-| `case_title` | 用例标题；非空值表示新用例开始 |
-| `step` | 步骤序号 |
-| `case_steps` | 步骤名称 |
-| `request_method` | 关键字名称 |
-| `request_data` | JSON 格式的关键字参数 |
-| `case_type` | `ApiCase` 或 `WebCase` |
+| 列名               | 说明                           |
+| ------------------ | ------------------------------ |
+| `case_number`    | 用例编号，可用于阅读和维护     |
+| `module`         | 业务模块                       |
+| `function`       | 业务功能                       |
+| `case_title`     | 用例标题；非空值表示新用例开始 |
+| `step`           | 步骤序号                       |
+| `case_steps`     | 步骤名称                       |
+| `request_method` | 关键字名称                     |
+| `request_data`   | JSON 格式的关键字参数          |
+| `case_type`      | `ApiCase` 或 `WebCase`     |
 
 同一用例的第一行填写基础信息，后续步骤行可以留空 `case_title`、`module`、`function` 和 `case_type`。解析器会将这些行归入最近一个用例。
 
@@ -401,39 +407,100 @@ request_headers:
 
 ### API 关键字
 
-| 关键字 | 作用 |
-|---|---|
-| `send_request` | 发送通用 HTTP 请求 |
-| `post_request` | 发送 POST 请求 |
-| `get_request` | 发送 GET 请求 |
-| `get_json_data` | 使用 JSONPath 提取响应数据 |
-| `fetch_database_data` | 执行数据库查询并保存结果 |
+| 关键字                  | 作用                       |
+| ----------------------- | -------------------------- |
+| `send_request`        | 发送通用 HTTP 请求         |
+| `post_request`        | 发送 POST 请求             |
+| `get_request`         | 发送 GET 请求              |
+| `get_json_data`       | 使用 JSONPath 提取响应数据 |
+| `fetch_database_data` | 执行数据库查询并保存结果   |
 
 ### Web 关键字
 
-| 关键字 | 作用 |
-|---|---|
-| `open_url` | 打开页面并截图 |
-| `click_element` | 等待并点击元素 |
-| `input_text` | 等待元素可见并输入文本 |
+| 关键字               | 作用                     |
+| -------------------- | ------------------------ |
+| `open_url`         | 打开页面并截图           |
+| `click_element`    | 等待并点击元素           |
+| `input_text`       | 等待元素可见并输入文本   |
 | `get_element_data` | 获取元素文本并写入上下文 |
-| `maximize_window` | 最大化浏览器窗口 |
-| `get_screenshot` | 将页面截图附加到 Allure |
-| `quit` | 关闭 WebDriver |
+| `maximize_window`  | 最大化浏览器窗口         |
+| `get_screenshot`   | 将页面截图附加到 Allure  |
+| `quit`             | 关闭 WebDriver           |
 
 ### 断言关键字
 
-| 关键字 | 作用 |
-|---|---|
-| `assert_text_equal` | 文本相等 |
-| `assert_text_contain` | 文本包含 |
-| `assert_text_not_contain` | 文本不包含 |
-| `assert_number_ge` | 数值大于等于 |
-| `assert_number_le` | 数值小于等于 |
-| `assert_number_equal` | 数值相等 |
-| `assert_number_not_equal` | 数值不相等 |
-| `assert_number_gt` | 数值大于 |
-| `assert_number_lt` | 数值小于 |
+| 关键字                      | 作用         |
+| --------------------------- | ------------ |
+| `assert_text_equal`       | 文本相等     |
+| `assert_text_contain`     | 文本包含     |
+| `assert_text_not_contain` | 文本不包含   |
+| `assert_number_ge`        | 数值大于等于 |
+| `assert_number_le`        | 数值小于等于 |
+| `assert_number_equal`     | 数值相等     |
+| `assert_number_not_equal` | 数值不相等   |
+| `assert_number_gt`        | 数值大于     |
+| `assert_number_lt`        | 数值小于     |
+
+### AI 关键字
+
+| 关键字        | 作用                                                                                |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `ai_assert` | 自然语言断言，用中文描述规则，由大模型判断响应是否满足；未配置 Key 时降级为本地规则 |
+
+`ai_assert` 参数：
+
+| 参数             | 说明                                                                                                |
+| ---------------- | --------------------------------------------------------------------------------------------------- |
+| `rule`         | 中文断言规则，必填，如 `状态码等于 200`、`响应体包含 token 字段且非空`                          |
+| `strict`       | `true`（默认）不满足则用例失败；`false` 只记录结论，适合探索阶段                                |
+| `context`      | 可选，补充上下文说明，如接口名称                                                                    |
+| `actual_value` | 可选，断言对象；不传时断言最近一次请求的响应，传入时断言该值（可配合 `get_json_data` 提取的变量） |
+
+```yaml
+- ai_check:
+    request_method: "ai_assert"
+    rule: "状态码等于 200 且响应体包含 token 字段"
+    strict: "true"
+    context: "登录接口"
+```
+
+## AI 辅助能力（可选）
+
+AI 能力位于 `HAT/ai/`，是旁路增强：**不配置也能正常跑全部用例**。
+
+### 配置
+
+通过环境变量或框架根目录的 `.env` 文件配置（OpenAI 兼容接口）：
+
+```text
+LLM_API_KEY=sk-xxx
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o-mini
+```
+
+### 两个能力
+
+1. **自然语言断言**：`ai_assert` 关键字。配置了 Key 时由大模型判断；未配置时降级为本地正则规则，覆盖「状态码等于」「包含某字段」「字段值等于」「响应体非空」等常见表述。
+2. **失败自动诊断**：`ai_debug_plugin` 在 `pytest_runtest_makereport` 钩子里监听 call 阶段失败，自动收集异常、请求信息、响应体与用例 YAML 内容，生成 Markdown 诊断报告写入 `ai_debug_reports/`。未配置 Key 时按「环境类 / 语法类 / 框架类 / 接口类 / 断言类」五类本地规则给出排查建议。
+
+两处能力的任何异常都不会影响 pytest 自身的判定流程；大模型调用只在 `HAT/ai/ai_debug_helper.py` 的 `call_llm` 一处实现。
+
+## AI Skills（`.trae/skills/`，学习用）
+
+项目收录了一组 Trae IDE 技能（SKILL.md 提示词文件），覆盖接口测试 × AI 的完整链路：
+
+| Skill                                | 作用                                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `hat-testcase-builder`             | **本项目专属**：自然语言接口场景 → HAT YAML 用例（含 ddt、`ai_assert` 用法与生成后自检） |
+| `api-testcase-designer`            | 接口信息 → Excel 用例清单                                                                        |
+| `hat-test-flow-builder`          | 对话式构建测试编排流（编排/计划制格式）                                                                |
+| `hat-test-plan-generator`        | 编排组合 → 执行计划（编排/计划制格式）                                                                |
+| `hat-dynamic-function-generator` | 生成编排节点调用的取数函数                                                                        |
+| `api-test-plan-executor`           | 直接执行文本测试计划并产出 HTML 报告                                                              |
+| `api-test-framework-scaffold`      | 生成 pytest 接口自动化框架骨架（含 day10 参考实现）                                               |
+| `api_testcase_ddt`                 | 数据驱动用例设计笔记（纯文档，无 frontmatter）                                                    |
+
+其中 `hat-test-flow-builder` / `hat-test-plan-generator` / `hat-dynamic-function-generator` 三个面向「编排 → 计划」制的另一种用例格式（与本框架的关键字驱动模型不同），仅作对比学习；给本项目写用例用 `hat-testcase-builder`。
 
 ## 自定义关键字扩展
 

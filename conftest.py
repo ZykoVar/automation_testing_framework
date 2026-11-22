@@ -1,1 +1,1 @@
-pytest_plugins = ["HAT.core.cases_plugin"]
+pytest_plugins = ["HAT.core.cases_plugin", "HAT.ai.ai_debug_plugin"]

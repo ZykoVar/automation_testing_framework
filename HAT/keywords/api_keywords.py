@@ -15,6 +15,7 @@ import pymysql
 from loguru import logger
 from pymysql import cursors
 
+from HAT.ai.ai_assert import ai_assert as ai_assert_judge
 from HAT.core.global_context import GlobalContext
 
 
@@ -380,6 +381,37 @@ class ApiKeywords:
                     result_dict[f"{var_names[col_index]}_{index}"] = item[key]
         GlobalContext().set_by_dict(result_dict)
         self.show_log("fetch_database_data", result_dict)
+
+    @allure.step("ai_assert")
+    def ai_assert(self, **kwargs: Any) -> None:
+        """
+        自然语言断言
+
+        用中文描述断言规则，交给大模型判断响应是否满足；
+        未配置 LLM_API_KEY 时自动降级为本地正则规则判断。
+
+        Args:
+            **kwargs:
+                rule: 中文断言规则，如 "状态码等于 200"、"响应体包含 token 字段且非空"
+                strict: "true"(默认) 不满足则让用例失败；"false" 只记录结论
+                context: 补充上下文，如 "登录接口"
+                actual_value: 可选，断言对象。不传时断言 GlobalContext 中最近的响应；
+                              传入时断言该值（可用于 get_json_data 提取出的变量）
+        """
+        rule = kwargs.get("rule", "")
+        if not rule:
+            raise ValueError("ai_assert 关键字缺少必填参数 rule")
+        strict = str(kwargs.get("strict", "true")).strip().lower() not in ("false", "0", "no")
+        context = kwargs.get("context", "")
+        actual_value = kwargs.get("actual_value", None)
+
+        # 断言对象：优先用显式传入的值，否则取上下文里最近的响应
+        target = actual_value if actual_value is not None else GlobalContext().get_context("response")
+        if target is None:
+            raise AssertionError("ai_assert 找不到断言对象：上下文中没有响应，也未传入 actual_value")
+
+        result = ai_assert_judge(target, rule, strict=strict, context=context)
+        self.show_log("ai_assert", {"rule": rule, "strict": strict, "satisfied": result})
 
     def ex_invoke(self, **kwargs: Any) -> None:
         """

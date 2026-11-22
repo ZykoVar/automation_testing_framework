@@ -1,0 +1,333 @@
+# ============================================================================
+# day10 / data / yaml_data / login.yaml
+#
+# 登录接口的 YAML 驱动用例数据。
+#
+# 被测接口：POST ${BASE_URL}/api/v1/auth/login
+# 请求模型：LoginRequest { username: str(必填), password: str(必填) }
+# 响应模型：TokenResponse { access_token, token_type, expires_in, user }
+#
+# 文件级字段会下沉到每一条用例，用例级字段覆盖文件级字段。
+# 所有 expect_status / expect_message 都取自对被测服务的实测结果，不做臆测。
+#
+# 用例覆盖的场景：
+#     - 正常登录与重复提交
+#     - 凭证错误（账号不存在、密码错误）
+#     - 必填字段缺失、请求体为空对象
+#     - 字段值为空串 / null
+#     - 字段类型错误（数字、布尔、浮点、数组、对象）
+#     - 必填字段多余传参、非法枚举值
+#     - 超长字符串、越界数值
+#     - SQL 注入 / XSS / 路径穿越
+#     - 错误 Content-Type 与缺失 Content-Type
+# ============================================================================
+
+# 所属模块
+module: 登录模块
+# 接口标识
+interface: login
+# 接口名称
+name: 用户登录
+# HTTP 方法
+method: POST
+# 接口路径
+path: /api/v1/auth/login
+# 服务基础地址。${BASE_URL} 由 utils/yaml_loader.py 在加载期渲染，
+# 取值来自环境变量 BASE_URL 或 .env，代码里不写死地址
+base_url: ${BASE_URL}
+# 文件级默认请求头
+headers:
+  Content-Type: application/json
+
+# 用例列表
+cases:
+  # ==========================================================================
+  # 一、正常登录
+  # ==========================================================================
+  - case_id: login001
+    case_name: 登录成功-正确账号密码
+    story: 登录成功
+    json_body:
+      username: admin
+      password: admin123
+    expect_status: 200
+    expect_json:
+      "$.token_type": bearer
+      "$.user.username": admin
+      "$.user.role": admin
+
+  - case_id: login002
+    case_name: 登录成功-同一账号重复提交三次
+    story: 重复提交
+    json_body:
+      username: admin
+      password: admin123
+    expect_status: 200
+    # 重复执行 3 次，逐次断言，用于验证服务端未对重复提交做锁定
+    repeat: 3
+    expect_json:
+      "$.token_type": bearer
+      "$.user.username": admin
+
+  # ==========================================================================
+  # 二、凭证错误
+  # ==========================================================================
+  - case_id: login003
+    case_name: 登录失败-账号不存在
+    story: 登录失败
+    json_body:
+      username: user_not_exist_9527
+      password: admin123
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  - case_id: login004
+    case_name: 登录失败-密码错误
+    story: 登录失败
+    json_body:
+      username: admin
+      password: admin1234
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  # ==========================================================================
+  # 三、必填字段缺失
+  # ==========================================================================
+  - case_id: login005
+    case_name: 参数校验失败-缺少password字段
+    story: 参数校验失败
+    json_body:
+      username: admin
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  - case_id: login006
+    case_name: 参数校验失败-缺少username字段
+    story: 参数校验失败
+    json_body:
+      password: admin123
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  - case_id: login007
+    case_name: 参数校验失败-请求体为空对象
+    story: 参数校验失败
+    json_body: {}
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  # ==========================================================================
+  # 四、字段值为空串 / null
+  # ==========================================================================
+  - case_id: login008
+    case_name: 参数校验失败-username为null
+    story: 参数校验失败
+    json_body:
+      username: null
+      password: admin123
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  - case_id: login009
+    case_name: 参数校验失败-password为null
+    story: 参数校验失败
+    json_body:
+      username: admin
+      password: null
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  - case_id: login010
+    case_name: 登录失败-username为空字符串
+    story: 字段值为空
+    json_body:
+      username: ""
+      password: admin123
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  - case_id: login011
+    case_name: 登录失败-password为空字符串
+    story: 字段值为空
+    json_body:
+      username: admin
+      password: ""
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  # ==========================================================================
+  # 五、字段类型错误
+  # ==========================================================================
+  - case_id: login012
+    case_name: 参数校验失败-password传数字
+    story: 参数校验失败
+    json_body:
+      username: admin
+      password: 123456
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  - case_id: login013
+    case_name: 参数校验失败-username传数组
+    story: 参数校验失败
+    json_body:
+      username:
+        - admin
+      password: admin123
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  - case_id: login014
+    case_name: 参数校验失败-password传布尔值
+    story: 参数校验失败
+    json_body:
+      username: admin
+      password: true
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  - case_id: login015
+    case_name: 参数校验失败-username传对象
+    story: 参数校验失败
+    json_body:
+      username:
+        name: admin
+      password: admin123
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  - case_id: login016
+    case_name: 参数校验失败-请求体传数组
+    story: 参数校验失败
+    json_body:
+      - admin
+      - admin123
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  # ==========================================================================
+  # 六、越界数值
+  # ==========================================================================
+  - case_id: login017
+    case_name: 参数校验失败-password传超大整数
+    story: 越界数值
+    json_body:
+      username: admin
+      password: 99999999999999999999
+    expect_status: 422
+    expect_message: 数据验证失败
+
+  # ==========================================================================
+  # 七、多余传参与非法枚举值
+  # ==========================================================================
+  - case_id: login018
+    case_name: 多余传参-附加非模型字段被忽略
+    story: 多余传参
+    json_body:
+      username: admin
+      password: admin123
+      role: super_admin
+      user_type: root
+      extra: "ignored"
+    expect_status: 200
+    # 服务端忽略多余字段，登录依旧成功且角色仍是 admin
+    expect_json:
+      "$.user.username": admin
+      "$.user.role": admin
+
+  - case_id: login019
+    case_name: 非法枚举值-status传未知枚举
+    story: 非法枚举值
+    json_body:
+      username: admin
+      password: admin123
+      status: unknown_status
+      gender: XX
+    expect_status: 200
+    expect_json:
+      "$.token_type": bearer
+
+  # ==========================================================================
+  # 八、超长字符串
+  # ==========================================================================
+  - case_id: login020
+    case_name: 超长字符串-用户名超过五百字符
+    story: 超长字符串
+    json_body:
+      username: "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+      password: admin123
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  - case_id: login021
+    case_name: 超长密码-超过bcrypt七十二字节上限
+    story: 超长字符串
+    json_body:
+      username: admin
+      password: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    expect_status: 500
+
+  # ==========================================================================
+  # 九、注入类输入
+  # ==========================================================================
+  - case_id: login022
+    case_name: 注入防护-SQL注入用户名
+    story: 注入防护
+    json_body:
+      username: "' OR '1'='1' --"
+      password: admin123
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  - case_id: login023
+    case_name: 注入防护-SQL注入密码
+    story: 注入防护
+    json_body:
+      username: admin
+      password: "admin123' OR '1'='1"
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  - case_id: login024
+    case_name: 注入防护-XSS脚本内容
+    story: 注入防护
+    json_body:
+      username: "<script>alert(1)</script>"
+      password: admin123
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  - case_id: login025
+    case_name: 注入防护-路径穿越
+    story: 注入防护
+    json_body:
+      username: "../../etc/passwd"
+      password: admin123
+    expect_status: 401
+    expect_message: 用户名或密码错误
+
+  # ==========================================================================
+  # 十、错误 Content-Type
+  # ==========================================================================
+  - case_id: login026
+    case_name: 错误Content-Type-纯文本提交
+    story: 错误Content-Type
+    headers:
+      Content-Type: text/plain
+    raw_body: "username=admin&password=admin123"
+    expect_status: 500
+
+  - case_id: login027
+    case_name: 错误Content-Type-表单编码提交
+    story: 错误Content-Type
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    raw_body: "username=admin&password=admin123"
+    expect_status: 500
+
+  - case_id: login028
+    case_name: 错误Content-Type-未声明Content-Type
+    story: 错误Content-Type
+    headers: {}
+    raw_body: "username=admin&password=admin123"
+    expect_status: 500

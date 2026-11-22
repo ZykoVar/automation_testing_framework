@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>接口测试计划执行报告</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 24px 64px;
+    background: #F7F7F8; color: #171717;
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; line-height: 1.7;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(23,23,23,.12); }
+  h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; }
+  .sub { color: #52525B; font-size: 13px; margin: 0 0 24px; }
+
+  .banner { padding: 14px 18px; border-radius: 10px; border: 1px solid; font-weight: 500; margin-bottom: 20px; }
+  .banner.pass { background: #E5FFF2; border-color: #0FDC78; color: #004D26; }
+  .banner.fail { background: #FDECEA; border-color: #E8463A; color: #8A1C13; }
+  .banner.block { background: #FFF6E3; border-color: #EFAA17; color: #7A4E00; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 8px; }
+  .stat { background: #FFF; border: 1px solid rgba(23,23,23,.12); border-radius: 10px; padding: 14px 16px; }
+  .stat .n { font-size: 24px; font-weight: 600; line-height: 1.2; }
+  .stat .l { font-size: 12px; color: #52525B; margin-top: 2px; }
+  .stat.p .n { color: #0F8A4C; }
+  .stat.f .n { color: #C62F24; }
+  .stat.b .n { color: #B57800; }
+
+  table { width: 100%; border-collapse: collapse; background: #FFF; border: 1px solid rgba(23,23,23,.12); border-radius: 10px; overflow: hidden; }
+  th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid rgba(23,23,23,.10); font-size: 13px; }
+  th { background: #EFEFF2; font-weight: 600; font-size: 13px; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #FAFAFB; }
+  td.code, pre { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 12.5px; }
+  pre { background: #F4F4F6; border: 1px solid rgba(23,23,23,.10); border-radius: 7px; padding: 9px 11px; margin: 6px 0 0; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+  .case-id { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; color: #52525B; display: block; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .badge.pass { background: #D9F9E7; color: #05603A; }
+  .badge.fail { background: #FDE3E0; color: #93221A; }
+  .badge.block { background: #FFF0D2; color: #7A4E00; }
+  .badge.skip { background: #E8E8EC; color: #52525B; }
+  .assert-list { list-style: none; padding: 0; margin: 8px 0 0; }
+  .assert-list li { padding: 4px 0 4px 16px; position: relative; }
+  .assert-list li::before { content: "·"; position: absolute; left: 4px; color: #A1A1AA; }
+  .res { font-weight: 600; }
+  .res.ok { color: #0F8A4C; }
+  .res.no { color: #C62F24; }
+  .exp, .act { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; color: #52525B; }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; font-size: 13px; }
+  .kv dt { color: #52525B; }
+  .kv dd { margin: 0; word-break: break-all; }
+  .note { background: #FFF; border: 1px solid rgba(23,23,23,.12); border-left: 3px solid #EFAA17; border-radius: 8px; padding: 12px 14px; margin: 10px 0; }
+  .note.danger { border-left-color: #E8463A; }
+  .note.ok { border-left-color: #0FDC78; }
+  .note h4 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+  .note p { margin: 4px 0; }
+  .foot { margin-top: 40px; padding-top: 14px; border-top: 1px solid rgba(23,23,23,.12); color: #52525B; font-size: 12px; }
+  @media (max-width: 900px) {
+    .kv { grid-template-columns: 1fr; }
+    .kv dd { margin-bottom: 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 1. 报告头 -->
+  <h1>{{计划名称}}</h1>
+  <p class="sub">执行时间：{{执行时间}} ｜ 环境：{{API_BASE_URL}} ｜ 执行方式：无脚本，直接命令行发起请求</p>
+
+  <!-- 2. 总体结论横幅 -->
+  <div class="banner {{pass|fail|block}}">{{总体结论一句话}}</div>
+
+  <!-- 3. 统计条 -->
+  <div class="stats">
+    <div class="stat"><div class="n">{{总数}}</div><div class="l">用例总数</div></div>
+    <div class="stat p"><div class="n">{{通过数}}</div><div class="l">通过</div></div>
+    <div class="stat f"><div class="n">{{失败数}}</div><div class="l">失败</div></div>
+    <div class="stat b"><div class="n">{{阻塞数}}</div><div class="l">阻塞 / 未执行</div></div>
+    <div class="stat"><div class="n">{{总断言数}}</div><div class="l">断言总数</div></div>
+  </div>
+
+  <!-- 4. 用例执行明细表（核心） -->
+  <h2>用例执行明细</h2>
+  <table>
+    <thead>
+      <tr><th style="width:18%">测试用例</th><th style="width:44%">执行数据</th><th style="width:38%">执行结果</th></tr>
+    </thead>
+    <tbody>
+      <!-- 每条用例一行，结构如下 -->
+      <tr>
+        <td>
+          <strong>{{用例名称}}</strong>
+          <span class="case-id">{{用例编号}}</span>
+          {{优先级}} ｜ {{所属编排}}
+        </td>
+        <td class="code">
+          <pre>{{METHOD}} {{完整URL}}
+{{请求头关键项}}
+{{请求体原文}}
+
+← HTTP {{状态码}}
+{{响应体摘要或截断}}</pre>
+        </td>
+        <td>
+          <span class="badge {{pass|fail}}">{{PASS|FAIL}}</span>
+          <ul class="assert-list">
+            <li><span class="res {{ok|no}}">{{✓|✗}}</span> {{断言描述}} — 预期 <span class="exp">{{预期值}}</span>，实际 <span class="act">{{实际值}}</span></li>
+          </ul>
+          {{失败归因与说明}}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 5. 断言明细 -->
+  <h2>断言明细</h2>
+  <table>
+    <thead>
+      <tr><th style="width:22%">用例</th><th style="width:32%">断言</th><th style="width:16%">预期</th><th style="width:18%">实际</th><th style="width:12%">判定</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{用例编号}}</td>
+        <td>{{断言描述}}</td>
+        <td class="exp">{{预期值}}</td>
+        <td class="act">{{实际值}}</td>
+        <td><span class="badge {{pass|fail}}">{{PASS|FAIL}}</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 6. 上下文传递记录 -->
+  <h2>上下文传递记录</h2>
+  <table>
+    <thead>
+      <tr><th style="width:22%">变量</th><th style="width:22%">产出方</th><th style="width:22%">消费方</th><th>值（脱敏）</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="code">{{access_token}}</td>
+        <td>{{用例1}}</td>
+        <td>{{用例2}}</td>
+        <td class="code">{{eyJ...3KQY}}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 7. 数据缺陷与风险 -->
+  <h2>数据缺陷与风险</h2>
+  <div class="note danger">
+    <h4>{{缺陷标题}}</h4>
+    <p>{{现象描述}}</p>
+    <p>证据：<span class="code">{{实测证据}}</span></p>
+    <p>建议：{{修复建议}}</p>
+  </div>
+
+  <!-- 8. 结论与建议 -->
+  <h2>结论与建议</h2>
+  <ol>
+    <li>{{结论条目}}</li>
+  </ol>
+
+  <div class="foot">
+    报告由 api-test-plan-executor 生成 ｜ 全部数据来自真实执行输出 ｜ 执行过程未编写任何测试脚本
+  </div>
+
+</div>
+</body>
+</html>

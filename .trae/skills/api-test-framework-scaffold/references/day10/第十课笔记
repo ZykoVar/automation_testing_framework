@@ -1,0 +1,52 @@
+自动化框架脚本架构提示词：
+请在目录【day10】下生成一个完整的企业级接口自动化测试框架。
+
+【参照基准】
+
+逐文件对齐以下内容：目录层级、文件名、模块划分、类名与函数名、
+fixture 名称、导入写法、日志格式、注释风格。
+
+
+【项目信息】
+- 项目目录名：【day10】
+- 被测服务：base_url = 【http://localhost:8000】，接口前缀 = 【/api/v1】
+- 账号密码：【admin / admin123】
+- 核心接口：【登录接口、创建学生接口、查询学生接口、删除学生接口】
+- 异常场景需覆盖：【登录失败、创建学生失败、查询学生失败、删除学生失败、学生不存在】
+
+【硬性要求：一、目录结构与文件名】
+所有的文件不要从任何地方复制过来，必须自己写。
+
+
+【项目目录名】/
+├── __init__.py                      # 使项目目录本身成为一个包
+├── .env                             # 存 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL
+├── .gitignore                       # 必须包含 .env，禁止提交密钥
+├── pytest.ini                       # 含 markers 注册与 testpaths
+├── cli.py                           # 入口脚本，转发 pytest 参数
+├── conftest.py                      # 根 conftest：session 级 fixture + AI 排错钩子
+├── utils/                           # 工具层（注意是 utils，不是 untils）
+│   ├── __init__.py                  # 包说明，含模块清单与依赖方向
+│   ├── AI_HttpClient.py             # HTTP 客户端，类名 HttpClient
+│   ├── config.py                    # 共享配置与业务常量
+│   ├── yaml_loader.py                # YAML 用例加载器，含 ApiCase 数据类
+│   ├── excel_loader.py              # Excel 用例加载器
+│   ├── yaml_excel_generator.py      # YAML 反向生成 Excel
+│   ├── ai_prompts.py                # 提示词与公共片段，纯标准库
+│   ├── ai_debug_helper.py           # 排错助手，含 call_llm 与 ai_debug
+│   └── ai_assert.py                 # 自然语言断言，含 ai_assert
+├── data/
+│   ├── yaml_data/                   # YAML 用例数据
+│   │   └── login.yaml
+│   └── excel_data/
+│       └── create_subject.xlsx
+├── test_case/                       # 测试脚本层
+│   ├── __init__.py
+│   ├── conftest.py                  # 子目录 conftest：数据工厂 fixture
+│   ├── test_login.py                # YAML 数据驱动
+│   ├── test_login_demo.py           # ai_assert 演示
+│   ├── test_demo_fail.py            # 故意失败用例，演示 AI 排错
+│   ├── test_student_flow.py         # 业务流程（Allure 装饰器 + step）
+│   └── test_subject_flow.py
+├── ai_debug_reports/                # AI 排错报告输出目录
+└── report/                          # Allure 报告输出目录
