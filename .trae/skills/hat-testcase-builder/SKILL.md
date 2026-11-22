@@ -1,6 +1,6 @@
 ---
 name: hat-testcase-builder
-description: 把自然语言的接口测试场景转换成 HAT 框架可直接执行的 YAML 用例。触发场景：用户给出接口信息（URL、方法、参数、响应示例、业务规则）或用中文描述测试场景，要求生成 HAT 用例、写 yaml 用例、补充测试场景、做数据驱动用例。不用于设计 Excel 用例清单（用 api-testcase-designer），也不用于生成 pytest 框架代码（用 api-test-framework-scaffold）。
+description: 把自然语言的测试场景转换成 HAT 框架可直接执行的 YAML 用例，同时支持接口用例（ApiCase）和 Web UI 用例（WebCase）。触发场景：用户给出接口信息（URL、方法、参数、响应示例、业务规则）或页面操作描述，或用中文描述测试场景，要求生成 HAT 用例、写 yaml 用例、补充测试场景、做数据驱动用例。不用于设计 Excel 用例清单（用 api-testcase-designer），也不用于生成 pytest 框架代码（用 api-test-framework-scaffold）。
 enabled: true
 ---
 
@@ -34,7 +34,7 @@ enabled: true
 
 ```yaml
 basic_configuration:
-  case_type: "ApiCase"        # ApiCase / WebCase，本 Skill 只生成 ApiCase
+  case_type: "ApiCase"        # ApiCase / WebCase，接口场景用 ApiCase，页面场景用 WebCase（见第 7 节）
   case_title: "login"         # 用例名，同时用于 pytest ID 和 Allure 标题
   module: "authentication"    # 所属模块，对应 Allure feature
   function: "login"           # 业务功能，对应 Allure story

@@ -483,6 +483,8 @@ LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4o-mini
 ```
 
+项目根目录自带 `.env.example`，复制为 `.env` 后填入实际值即可（`.env` 已被 `.gitignore` 忽略，不会提交）。环境变量优先级高于 `.env` 文件。
+
 ### 两个能力
 
 1. **自然语言断言**：`ai_assert` 关键字。配置了 Key 时由大模型判断；未配置时降级为本地正则规则，覆盖「状态码等于」「包含某字段」「字段值等于」「响应体非空」等常见表述。
