@@ -2,48 +2,27 @@ url: "https://dev-rzforex-2.0.gen-x.dev"
 
 key_dir: "./HAT/key_dir"
 
-driver_reuse: True
+driver_reuse: true
 
+# Playwright 浏览器配置
 _browser_config:
-  grid_url: "" # 远程地址 grid 分布式运行
-  driver_path: "/opt/homebrew/bin/chromedriver" # 驱动地址
-  capability:
-    "browser_name": "chrome"
-  options:
-    args:
-      - "--incognito"
+  browser_name: "chromium"   # chromium / firefox / webkit
+  headless: true             # false 可打开浏览器界面观察执行过程
+  viewport:
+    width: 1920
+    height: 1080
+  args: []                   # 额外启动参数，如 ["--incognito"]
 
-#_browser_config:
-#  grid_url: "" # 远程地址 grid 分布式运行
-#  driver_path: "/usr/local/bin/geckodriver" # 驱动地址
-#  capability:
-#    browser_name: "firefox"
-#  options:
-#    args:
-#      - "--incognito"
-
+# 元素定位：推荐方言字符串（CSS 默认 / role= / text= / placeholder= / testid= / xpath= / tag=）
+# 旧版 {"locating_method": "By.XPATH", "expression": "..."} 字典写法仍然兼容
 _all_web_elements:
   login: # element_position
-    email_input: # element
-      locating_method: "By.XPATH"
-      expression: "//input[@type='email']"
-    password_input:
-      locating_method: "By.XPATH"
-      expression: "//input[@type='password']"
-    login_button:
-      locating_method: "By.XPATH"
-      expression: "//button[text()='Log in']"
-    login_error_message:
-      locating_method: "By.XPATH"
-      expression: "//div[text()='Email or password not correct']"
+    email_input: "css=input[type='email']"
+    password_input: "css=input[type='password']"
+    login_button: "xpath=//button[text()='Log in']"
+    login_error_message: "xpath=//div[text()='Email or password not correct']"
   home:
-    apply_account_button:
-      locating_method: "By.XPATH"
-      expression: "//button[text()='Apply account']"
-    home_button:
-      locating_method: "By.XPATH"
-      expression: "//p[text()='Home']"
+    apply_account_button: "xpath=//button[text()='Apply account']"
+    home_button: "xpath=//p[text()='Home']"
   apply_for_collecting_accounts:
-    currency_button:
-      locating_method: "By.XPATH"
-      expression: "(//p[text()='NZD'])[2]"
+    currency_button: "xpath=(//p[text()='NZD'])[2]"

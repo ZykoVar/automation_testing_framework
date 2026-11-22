@@ -137,3 +137,26 @@ python -m pytest --collect-only -q HAT/core/test_runner.py \
 完整可跑的示例在 `examples/api_cases_yaml/`：
 `1_login.yaml`（请求 + 提取 + 断言的标准三步）、`0_login_ddt.yaml`（ddt 用法）。
 生成前建议先读一眼，保持风格一致。
+
+## 7. Web 用例（case_type: "WebCase"）
+
+Web 用例与 API 用例共用同一套骨架，差异只在步骤关键字和元素配置：
+
+- 元素定位集中在用例目录 `context.yaml` 的 `_all_web_elements`，按页面分组，
+  用例步骤里用 `element_position` + `element` 引用；
+- 定位写法推荐方言字符串：`placeholder=手机号码`、`role=button[name='登录']`、
+  `text=评论`、`xpath=//input[@type='email']`、CSS 直接写选择器；
+  旧版 `{"locating_method": "By.XPATH", "expression": "..."}` 字典仍兼容；
+- 浏览器行为由 `context.yaml` 的 `_browser_config` 控制
+  （`browser_name` / `headless` / `viewport` / `args`）；
+- 常用步骤：`open_url` → `input_text` / `click_element` → `get_element_data` 存变量 → `assert_text_*`；
+- 页面级模糊断言用 `ai_assert_screenshot`（截图喂视觉模型，参数同 `ai_assert`）：
+
+```yaml
+- ai_check:
+    request_method: "ai_assert_screenshot"
+    rule: "页面右上角显示用户名"
+    strict: "true"
+```
+
+完整示例见 `examples/web_cases_yaml/`。

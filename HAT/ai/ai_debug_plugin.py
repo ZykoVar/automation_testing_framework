@@ -23,6 +23,7 @@ HAT / ai / ai_debug_plugin.py
 """
 
 import os
+import re
 
 import pytest
 import yaml
@@ -151,6 +152,45 @@ def _extract_case_content(item):
         return str(case_info)
 
 
+def _capture_web_screenshot(item):
+    """Web 用例失败时截取当前页面，保存到诊断报告目录。
+
+    WebCaseContext 初始化时会把当前 page 写入 GlobalContext 的 "page" 键，
+    这里直接取用。API 用例没有 page，返回 None。
+
+    :param item: pytest 的 item 对象
+    :return: 截图文件路径；取不到 page 或截图失败时返回 None
+    """
+    try:
+        from HAT.context.web_case_context import (
+            get_current_page,
+            get_failure_screenshot,
+        )
+    except Exception:
+        return None
+
+    # 优先用 test_runner 在异常路径上截取的失败现场（上下文释放前截取）
+    failure_shot = get_failure_screenshot()
+    if failure_shot and os.path.isfile(failure_shot):
+        return failure_shot
+
+    # 兜底：page 还活着时当场截一张
+    try:
+        page = get_current_page()
+    except Exception:
+        return None
+    if page is None or not hasattr(page, "screenshot"):
+        return None
+    try:
+        safe_name = re.sub(r'[\\/:*?"<>|\[\]]', "_", item.name or "unknown_case")
+        file_path = os.path.join(AI_DEBUG_REPORT_DIR, "{}_fail.png".format(safe_name))
+        page.screenshot(path=file_path, full_page=True)
+        return file_path
+    except Exception as error:
+        print("[AI排错] Web 失败截图失败: {}".format(error))
+        return None
+
+
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item, call):
     """用例失败时自动生成 AI 排错诊断报告。
@@ -182,12 +222,24 @@ def pytest_runtest_makereport(item, call):
         response_text = _extract_response_text(response)
         case_content = _extract_case_content(item)
 
+        # Web 用例失败时额外截取页面现场。
+        # 注意：REPORT_TEMPLATE 不渲染 context，截图路径必须并进 response_text
+        # 才能落到报告里（Web 用例本来就没有接口响应体，刚好放在这一节）
+        screenshot_path = _capture_web_screenshot(item)
+        if screenshot_path:
+            response_text = "失败时页面截图: {}\n{}".format(screenshot_path, response_text)
+
         context = (
             "测试框架: HAT（关键字驱动，用例为 YAML 数据）\n"
             "用例: {}\n"
             "用例节点: {}\n"
+            "{}"
             "说明: 「失败位置源码」一节是该用例的 YAML 内容，不是 Python 代码"
-        ).format(item.name, getattr(item, "nodeid", ""))
+        ).format(
+            item.name,
+            getattr(item, "nodeid", ""),
+            "失败时页面截图: {}\n".format(screenshot_path) if screenshot_path else "",
+        )
 
         ai_debug(
             exception=exception_text,

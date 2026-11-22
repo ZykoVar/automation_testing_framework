@@ -1,274 +1,394 @@
+# -*- coding: utf-8 -*-
 """
-Web自动化测试关键字模块
+Web自动化测试关键字模块（Playwright 实现）
 
-该模块提供了Web自动化测试的核心关键字实现，
-包括元素定位、等待、操作等常用功能。
+提供Web自动化测试所需的各种关键字方法，包括页面导航、元素交互、
+数据提取、断言验证、数据库查询和 AI 视觉断言等。
+
+定位表达式支持两种写法（都经 _resolve 统一解析）：
+
+  1. 方言字符串（推荐，与 Playwright 语义定位对齐）：
+       CSS 默认      ".cls" / "#id" / "input[name='x']"
+       placeholder   "placeholder=手机号码"
+       role+name     "role=button[name='登录']"
+       role+exact    "role=button[name='登录',exact]"
+       text          "text=评论" / "text=评论,exact"
+       testid        "testid=xxx"
+       xpath         "xpath=//input[@type='email']"
+       tag 语法糖    "tag=button.submit"
+
+  2. 旧版字典（向后兼容 Selenium 时代的用例配置）：
+       {"locating_method": "By.XPATH", "expression": "//input[@type='email']"}
+     支持的 locating_method：By.XPATH / By.CSS_SELECTOR / By.ID /
+     By.NAME / By.CLASS_NAME / By.TAG_NAME / By.LINK_TEXT
+
+timeout 参数单位为秒（与旧版 Selenium 实现的语义保持一致），内部换算成毫秒。
 """
 
+import base64
+import re
 import sys
-from base64 import b64decode
-from typing import Any, Optional, List, Dict, Callable
+from typing import Any, Dict, Callable, Optional
 
 import allure
 import pymysql
 from loguru import logger
+from playwright.sync_api import Locator, Page
 from pymysql import cursors
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as ec
-from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.webdriver.remote.webelement import WebElement
 
+from HAT.ai.ai_assert import judge_by_local_rules, parse_verdict
+from HAT.ai.ai_debug_helper import call_llm, has_api_key, render_assert_prompt
 from HAT.core.global_context import GlobalContext
+
+# 旧版 Selenium 定位方式 → 方言字符串前缀 的映射
+_LEGACY_BY_MAP = {
+    "XPATH": "xpath={expr}",
+    "CSS_SELECTOR": "css={expr}",
+    "ID": "css=#{expr}",
+    "NAME": "css=[name='{expr}']",
+    "CLASS_NAME": "css=.{expr}",
+    "TAG_NAME": "css={expr}",
+    "LINK_TEXT": "text={expr}",
+}
 
 
 class WebKeywords:
     """
-    Web自动化测试关键字类
-    
-    提供Web自动化测试所需的各种关键字方法，包括浏览器操作、元素定位和交互等。
+    Web自动化关键字类
+
+    提供Web自动化测试所需的各种关键字方法，包括页面导航、元素定位和交互等。
+
+    Attributes:
+        page: Playwright Page 对象
     """
 
-    def __init__(self, driver: WebDriver) -> None:
+    def __init__(self, page: Page) -> None:
         """
         初始化Web关键字对象
-        
-        Args:
-            driver: WebDriver实例
-        """
-        self.driver = driver
-
-    def wait(self, **kwargs: Any) -> WebDriverWait:
-        """
-        创建WebDriverWait对象
-        
-        Args:
-            **kwargs: 可变关键字参数
-                timeout (int): 等待超时时间，默认为10秒
-                
-        Returns:
-            WebDriverWait: WebDriverWait实例
-        """
-        timeout = kwargs.get("timeout", 10)
-        return WebDriverWait(self.driver, timeout)
-
-    def wait_for_all_elements_visibility(self, locator: tuple[str, str]) -> Optional[List[WebElement]]:
-        """
-        等待所有指定元素可见
-        
-        Args:
-            locator: 元素定位器 (By, value) 元组
-            
-        Returns:
-            list: 可见的元素列表，如果超时未找到则返回None
-        """
-        try:
-            elements = self.wait().until(
-                ec.visibility_of_all_elements_located(locator)
-            )
-            return elements
-        except Exception as e:
-            print(e)
-
-    def wait_for_element_clickable(self, locator: tuple[str, str]) -> Optional[WebElement]:
-        """
-        等待元素可点击
-        
-        Args:
-            locator: 元素定位器 (By, value) 元组
-            
-        Returns:
-            WebElement: 可点击的元素对象，如果超时未找到则返回None
-        """
-        try:
-            element = self.wait().until(
-                ec.element_to_be_clickable(locator)
-            )
-            return element
-        except Exception as e:
-            print(e)
-
-    def get_locator(self, **kwargs: Any) -> tuple[str, str]:
-        """
-        获取元素定位器
-
-        从全局上下文中获取Web元素配置信息，并根据传入的参数构建元素定位器。
 
         Args:
-            **kwargs: 可变关键字参数
-                element_position (str): 元素位置键名，用于在全局上下文中查找元素位置配置
-                element (str): 元素键名，用于在元素位置配置中查找具体元素信息
+            page: Playwright Page 实例
+        """
+        self.page = page
+
+    # ==================== 定位解析 ====================
+
+    def _resolve(self, selector: str) -> Locator:
+        """
+        把方言字符串解析成 Playwright Locator
+
+        Args:
+            selector: 方言定位字符串
 
         Returns:
-            tuple: Selenium定位器元组 (定位方式, 定位表达式)
+            Locator: Playwright 定位器
+        """
+        s = str(selector).strip()
+        if s.startswith("placeholder="):
+            return self.page.get_by_placeholder(s[len("placeholder="):])
+        if s.startswith("text="):
+            body = s[len("text="):]
+            if body.endswith(",exact"):
+                return self.page.get_by_text(body[:-len(",exact")], exact=True)
+            return self.page.get_by_text(body)
+        if s.startswith("testid="):
+            return self.page.get_by_test_id(s[len("testid="):])
+        if s.startswith("tag="):
+            return self.page.locator(s[len("tag="):])
+        if s.startswith("role="):
+            body = s[len("role="):]
+            m = re.match(r"^([\w-]+)\[(.+)\]$", body)
+            if m:
+                role_name = m.group(1)
+                kv_match = re.match(
+                    r"^(\w+(?:-\w+)?)\s*=\s*['\"]?([^'\"]+)['\"]?\s*(?:,(exact))?\s*$",
+                    m.group(2),
+                )
+                if kv_match and kv_match.group(1) == "name":
+                    return self.page.get_by_role(
+                        role_name,
+                        name=kv_match.group(2),
+                        exact=kv_match.group(3) == "exact",
+                    )
+                return self.page.get_by_role(role_name)
+            return self.page.get_by_role(body)
+        return self.page.locator(s)
 
-        Raises:
-            TypeError: 当_global_web_elements不是字典类型或element_position/
-                      element_position_key不是字符串类型时
-            KeyError: 当在全局上下文中找不到指定的元素位置或元素时
+    def _get_selector(self, **kwargs: Any) -> str:
+        """
+        从全局上下文 _all_web_elements 中取出定位表达式
 
-        Example:
-            >>> element_locator = self.get_locator(
-            ...     element_position="login_page",
-            ...     element="username_input"
-            ... )
-            >>> print(element_locator)
-            (By.ID, "username")
+        元素配置支持方言字符串或旧版字典两种写法。
+
+        Args:
+            **kwargs: element_position（页面分组键）、element（元素键）
+
+        Returns:
+            str: 方言定位字符串
         """
         all_web_elements = GlobalContext().get_context("_all_web_elements")
         if not isinstance(all_web_elements, dict):
-            raise TypeError(f"_all_web_elements should be a dict, but got {type(all_web_elements)}")
+            raise TypeError(
+                f"_all_web_elements should be a dict, but got {type(all_web_elements)}"
+            )
 
-        element_position_key = kwargs["element_position"]
-        if not isinstance(element_position_key, str):
-            raise TypeError(f"element_position should be a string, but got {type(element_position_key)}")
-
-        element_position = all_web_elements.get(element_position_key)
-        if element_position is None:
-            raise KeyError(f"Element position '{element_position_key}' not found in _all_web_elements")
-
-        if not isinstance(element_position, dict):
-            raise TypeError(f"Element position should be a dict, but got {type(element_position)}")
+        position_key = kwargs["element_position"]
+        position = all_web_elements.get(position_key)
+        if position is None:
+            raise KeyError(f"Element position '{position_key}' not found in _all_web_elements")
 
         element_key = kwargs["element"]
-        if not isinstance(element_key, str):
-            raise TypeError(f"element should be a string, but got {type(element_key)}")
-
-        element = element_position.get(element_key)
+        element = position.get(element_key)
         if element is None:
-            raise KeyError(f"Element '{element_key}' not found in element position '{element_position_key}'")
+            raise KeyError(f"Element '{element_key}' not found in position '{position_key}'")
 
-        locating_method = element["locating_method"]
-        if isinstance(locating_method, str):
-            from selenium.webdriver.common.by import By
-            locating_method = getattr(By, locating_method.split(".")[-1])
-        locator = (locating_method, element["expression"])
-        self.show_log("get_locator", locator)
-        return locator
+        # 新格式：直接是方言字符串
+        if isinstance(element, str):
+            return element
 
-    @allure.step("maximize_window")
-    def maximize_window(self) -> None:
-        """
-        最大化浏览器窗口
-        """
-        self.driver.maximize_window()
-        self.show_log("maximize_window")
+        # 旧格式：{"locating_method": "By.XPATH", "expression": "..."}
+        if isinstance(element, dict):
+            method = str(element.get("locating_method", "By.CSS_SELECTOR"))
+            by_name = method.split(".")[-1].upper()
+            template = _LEGACY_BY_MAP.get(by_name)
+            if template is None:
+                raise ValueError(f"不支持的 locating_method: {method}")
+            return template.format(expr=element.get("expression", ""))
+
+        raise TypeError(f"元素配置应为字符串或字典，实际为 {type(element)}")
+
+    def _find(self, **kwargs: Any) -> Locator:
+        """按 element_position + element 定位元素。"""
+        return self._resolve(self._get_selector(**kwargs))
+
+    @staticmethod
+    def _timeout_ms(kwargs: Dict[str, Any], default_seconds: float = 10) -> float:
+        """把秒为单位的 timeout 参数换算成 Playwright 需要的毫秒。"""
+        return float(kwargs.get("timeout", default_seconds)) * 1000
+
+    # ==================== 页面导航 ====================
 
     @allure.step("open_url")
     def open_url(self, **kwargs: Any) -> None:
         """
         打开指定URL
-        
+
         Args:
-            **kwargs: 可变关键字参数
-                request_url (str): 要打开的URL地址
+            **kwargs: request_url（要打开的URL地址）
         """
-        self.driver.get(kwargs["request_url"])
+        self.page.goto(kwargs["request_url"], wait_until="load")
         self.show_log("open_url", kwargs["request_url"])
-        self.maximize_window()
         self.get_screenshot()
 
-    def find_element_visibility(self, **kwargs: Any) -> WebElement:
-        """
-        查找可见元素
-        
-        Args:
-            **kwargs: 可变关键字参数
-                element_position (str): 元素位置键名
-                element (str): 元素键名
-                index (int): 元素索引，默认为0
-                
-        Returns:
-            WebElement: 找到的元素对象
-        """
-        locator = self.get_locator(**kwargs)
+    @allure.step("go_back")
+    def go_back(self, **kwargs: Any) -> None:
+        """浏览器后退。"""
+        self.page.go_back()
+        self.show_log("go_back")
 
-        element_list = self.wait_for_all_elements_visibility(locator)
-        if len(element_list) == 1:
-            return element_list[0]
-        else:
-            index = int(kwargs.get("index", 0))
-            return element_list[index]
+    @allure.step("refresh_page")
+    def refresh_page(self, **kwargs: Any) -> None:
+        """刷新当前页面。"""
+        self.page.reload()
+        self.show_log("refresh_page")
 
-    def find_element_clickable(self, **kwargs: Any) -> WebElement:
-        """
-        查找可点击元素
-        
-        Args:
-            **kwargs: 可变关键字参数
-                element_position (str): 元素位置键名
-                element (str): 元素键名
-                
-        Returns:
-            WebElement: 可点击的元素对象
-        """
-        locator = self.get_locator(**kwargs)
-        return self.wait_for_element_clickable(locator)
+    # ==================== 元素交互 ====================
 
     @allure.step("click_element")
     def click_element(self, **kwargs: Any) -> None:
         """
-        点击元素
-        
+        点击元素（Playwright 自动等待元素可见可点）
+
         Args:
-            **kwargs: 可变关键字参数
-                locating_method (str): 定位方式，如 "By.XPATH"
-                expression (str): 定位表达式
+            **kwargs: element_position、element、timeout（秒，默认10）
         """
-        self.find_element_clickable(**kwargs).click()
+        self._find(**kwargs).click(timeout=self._timeout_ms(kwargs))
         self.show_log("click_element")
         self.get_screenshot()
 
     @allure.step("input_text")
     def input_text(self, **kwargs: Any) -> None:
         """
-        在元素中输入文本
-        
+        在元素中输入文本（fill 语义，先清空再输入）
+
         Args:
-            **kwargs: 可变关键字参数
-                locating_method (str): 定位方式，如 "By.XPATH"
-                expression (str): 定位表达式
-                text (str): 要输入的文本
+            **kwargs: element_position、element、text、timeout（秒，默认10）
         """
-        self.find_element_visibility(**kwargs).send_keys(kwargs["text"])
+        self._find(**kwargs).fill(str(kwargs["text"]), timeout=self._timeout_ms(kwargs))
         self.show_log("input_text", kwargs["text"])
         self.get_screenshot()
 
+    @allure.step("hover_element")
+    def hover_element(self, **kwargs: Any) -> None:
+        """悬停在元素上（触发下拉菜单等悬浮交互）。"""
+        self._find(**kwargs).hover(timeout=self._timeout_ms(kwargs))
+        self.show_log("hover_element")
+        self.get_screenshot()
+
+    @allure.step("select_option")
+    def select_option(self, **kwargs: Any) -> None:
+        """
+        下拉框选择
+
+        Args:
+            **kwargs: element_position、element、value（选项的 value 或可见文本）
+        """
+        self._find(**kwargs).select_option(kwargs["value"], timeout=self._timeout_ms(kwargs))
+        self.show_log("select_option", kwargs["value"])
+
+    @allure.step("execute_js")
+    def execute_js(self, **kwargs: Any) -> None:
+        """
+        执行 JavaScript，返回值可存入上下文变量
+
+        Args:
+            **kwargs: script（JS 表达式）、variable_name（可选，存结果的变量名）
+        """
+        result = self.page.evaluate(kwargs["script"])
+        if kwargs.get("variable_name"):
+            GlobalContext().set_context(kwargs["variable_name"], result)
+        self.show_log("execute_js", result)
+
+    @allure.step("wait_for_text")
+    def wait_for_text(self, **kwargs: Any) -> None:
+        """
+        等待页面出现指定文本（常用于等待异步加载完成）
+
+        Args:
+            **kwargs: text、timeout（秒，默认10）
+        """
+        self.page.get_by_text(str(kwargs["text"])).first.wait_for(
+            state="visible", timeout=self._timeout_ms(kwargs)
+        )
+        self.show_log("wait_for_text", kwargs["text"])
+
+    # ==================== 数据提取 ====================
+
+    @allure.step("get_element_data")
+    def get_element_data(self, **kwargs: Any) -> None:
+        """
+        获取元素文本并写入全局上下文
+
+        Args:
+            **kwargs: element_position、element、variable_name、timeout（秒，默认10）
+        """
+        element = self._find(**kwargs).first
+        element.wait_for(state="visible", timeout=self._timeout_ms(kwargs))
+        result = element.inner_text()
+        if not result:
+            raise Exception(
+                f"No data found in element position: "
+                f"{kwargs.get('element_position')} {kwargs.get('element')}"
+            )
+        self.show_log("get_element_data", result)
+        GlobalContext().set_context(kwargs["variable_name"], result)
+
     @allure.step("get_screenshot")
     def get_screenshot(self) -> None:
-        """
-        获取屏幕截图
-        """
-        img_base64 = self.driver.get_screenshot_as_base64()
-        allure.attach(b64decode(img_base64.encode("ascii")), "screenshot", allure.attachment_type.PNG)
+        """截取当前页面并附加到 Allure 报告。"""
+        allure.attach(
+            self.page.screenshot(full_page=True),
+            "screenshot",
+            allure.attachment_type.PNG,
+        )
         self.show_log("get_screenshot")
 
     @allure.step("quit")
     def quit(self):
         """
-        关闭WebDriver会话
+        关闭当前用例的浏览器上下文。
+
+        正常情况下 WebCaseContext.release_driver 会统一释放，
+        该关键字用于用例中途主动结束浏览器会话的场景。
         """
-        self.driver.quit()
+        self.page.context.close()
         self.show_log("quit")
 
-    @allure.step("get_element_data")
-    def get_element_data(self, **kwargs: Any) -> None:
+    # ==================== AI 视觉断言 ====================
+
+    def _collect_page_text(self) -> str:
+        """收集页面的 URL + title + body 可见文本，作为文本模式的判断依据。"""
+        try:
+            body = self.page.evaluate("document.body ? document.body.innerText : ''")
+        except Exception as e:
+            logger.warning(f"收集页面文本失败: {e}")
+            body = ""
+        return f"[URL] {self.page.url}\n[TITLE] {self.page.title()}\n[BODY]\n{body}"
+
+    @allure.step("ai_assert_screenshot")
+    def ai_assert_screenshot(self, **kwargs: Any) -> None:
         """
-        获取数据
+        AI 视觉断言：截取当前页面，让大模型判断是否满足中文规则
+
+        判断链路：
+            有 Key：截图 → 视觉模型判断
+                    → 视觉调用失败时降级为「页面文本 → 文本模型」
+            无 Key：降级为「页面文本 → 本地正则规则」（与接口侧 ai_assert 同源）
 
         Args:
-            **kwargs: 获取数据相关参数
+            **kwargs:
+                rule: 中文断言规则，必填，如 "页面右上角显示用户名 admin"
+                strict: "true"(默认) 不满足则让用例失败；"false" 只记录结论
+                context: 可选，补充上下文说明
         """
-        try:
-            result = self.find_element_visibility(**kwargs).text
-            if not result:
-                raise Exception(
-                    f"No data found in element position: "
-                    f"{kwargs.get('element_position')} {kwargs.get('element')}"
-                )
-            self.show_log("get_element_data", result)
-            GlobalContext().set_context(kwargs["variable_name"], result)
-        except Exception as e:
-            raise Exception(f"Failed to extract JSON data: {str(e)}")
+        rule = kwargs.get("rule", "")
+        if not rule:
+            raise ValueError("ai_assert_screenshot 关键字缺少必填参数 rule")
+        strict = str(kwargs.get("strict", "true")).strip().lower() not in ("false", "0", "no")
+        context = kwargs.get("context", "")
+
+        # 截图留证（无论走哪条判断链路，报告里都能看到当时页面长什么样）
+        screenshot_bytes = self.page.screenshot(full_page=True)
+        allure.attach(screenshot_bytes, "AI 断言截图", allure.attachment_type.PNG)
+
+        satisfied: Optional[bool] = None
+        reason = ""
+
+        if has_api_key():
+            # 视觉模式
+            image_b64 = base64.b64encode(screenshot_bytes).decode()
+            raw = call_llm(
+                render_assert_prompt(rule, "（页面内容见所附截图，请基于截图判断）", context),
+                image_b64=image_b64,
+            )
+            if raw.strip():
+                satisfied = parse_verdict(raw)
+                reason = raw
+                if satisfied is None:
+                    # 模型输出未带 VERDICT 标记，按保守原则视为不通过
+                    satisfied = False
+                    reason = "（模型输出缺少 VERDICT 标记，按不通过处理）\n" + raw
+            if satisfied is None:
+                # 视觉调用失败，降级为文本模式再试一次
+                logger.warning("视觉模式调用失败，降级为页面文本模式")
+                page_text = self._collect_page_text()
+                raw = call_llm(render_assert_prompt(rule, page_text[:2000], context))
+                if raw.strip():
+                    satisfied = parse_verdict(raw)
+                    reason = "（视觉模式不可用，已降级为页面文本判断）\n" + raw
+                    if satisfied is None:
+                        satisfied = False
+                        reason = "（模型输出缺少 VERDICT 标记，按不通过处理）\n" + reason
+            if satisfied is None:
+                satisfied = False
+                reason = "（大模型调用失败，按不通过处理）"
+        else:
+            # 无 Key：本地正则规则对页面文本做判断
+            satisfied, reason = judge_by_local_rules(rule, {"text": self._collect_page_text()})
+            reason = "（未配置 LLM_API_KEY，本地规则基于页面文本判断）" + reason
+
+        allure.attach(
+            f"RULE:\n{rule}\n\nRESULT: {satisfied}\n\nDETAIL:\n{reason}",
+            name="AI 视觉断言详情",
+            attachment_type=allure.attachment_type.TEXT,
+        )
+        print(f"[AI断言] {'通过' if satisfied else '不通过'} | 规则: {rule}")
+        self.show_log("ai_assert_screenshot", {"rule": rule, "satisfied": satisfied})
+
+        if not satisfied and strict:
+            raise AssertionError(f"自然语言断言不满足\n规则: {rule}\n依据: {reason}")
+
+    # ==================== 断言（与 API 侧保持一致） ====================
 
     @allure.step("assert_data")
     def assert_data(self, **kwargs: Any) -> None:
@@ -322,120 +442,68 @@ class WebKeywords:
 
     @allure.step("assert_text_equal")
     def assert_text_equal(self, **kwargs: Any) -> None:
-        """
-        文本相等断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为相等
+        """文本相等断言"""
         kwargs.update({"comparison_operator": "=="})
         self.assert_data(**kwargs)
         self.show_log("assert_text_equal", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_text_contain")
     def assert_text_contain(self, **kwargs: Any) -> None:
-        """
-        文本包含断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为包含
+        """文本包含断言"""
         kwargs.update({"comparison_operator": "in"})
         self.assert_data(**kwargs)
         self.show_log("assert_text_contain", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_text_not_contain")
     def assert_text_not_contain(self, **kwargs: Any) -> None:
-        """
-        文本不包含断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为不包含
+        """文本不包含断言"""
         kwargs.update({"comparison_operator": "not in"})
         self.assert_data(**kwargs)
         self.show_log("assert_text_not_contain", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_ge")
     def assert_number_ge(self, **kwargs: Any) -> None:
-        """
-        数字大于等于断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为大于等于，并指定比较类型为数字
+        """数字大于等于断言"""
         kwargs.update({"comparison_operator": ">=", "compare_type": "number"})
         self.assert_data(**kwargs)
         self.show_log("assert_number_ge", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_le")
     def assert_number_le(self, **kwargs: Any) -> None:
-        """
-        数字小于等于断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为小于等于，并指定比较类型为数字
+        """数字小于等于断言"""
         kwargs.update({"comparison_operator": "<=", "compare_type": "number"})
         self.assert_data(**kwargs)
         self.show_log("assert_number_le", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_equal")
     def assert_number_equal(self, **kwargs: Any) -> None:
-        """
-        数字相等断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为相等，并指定比较类型为数字
+        """数字相等断言"""
         kwargs.update({"comparison_operator": "==", "compare_type": "number"})
         self.assert_data(**kwargs)
         self.show_log("assert_number_equal", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_not_equal")
     def assert_number_not_equal(self, **kwargs: Any) -> None:
-        """
-        数字不相等断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为不相等，并指定比较类型为数字
+        """数字不相等断言"""
         kwargs.update({"comparison_operator": "!=", "compare_type": "number"})
         self.assert_data(**kwargs)
         self.show_log("assert_number_not_equal", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_gt")
     def assert_number_gt(self, **kwargs: Any) -> None:
-        """
-        数字大于断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为大于，并指定比较类型为数字
+        """数字大于断言"""
         kwargs.update({"comparison_operator": ">", "compare_type": "number"})
         self.assert_data(**kwargs)
         self.show_log("assert_number_gt", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
 
     @allure.step("assert_number_lt")
     def assert_number_lt(self, **kwargs: Any) -> None:
-        """
-        数字小于断言
-
-        Args:
-            **kwargs: 断言参数
-        """
-        # 设置比较操作符为小于，并指定比较类型为数字
+        """数字小于断言"""
         kwargs.update({"comparison_operator": "<", "compare_type": "number"})
         self.assert_data(**kwargs)
         self.show_log("assert_number_lt", f"{kwargs['actual_value']} - {kwargs['expected_value']}")
+
+    # ==================== 数据库与日志 ====================
 
     @allure.step("fetch_database_data")
     def fetch_database_data(self, **kwargs: Any) -> None:
@@ -497,9 +565,9 @@ class WebKeywords:
     def ex_invoke(self, **kwargs: Any) -> None:
         """
         执行扩展方法
-        
+
         从指定的扩展目录加载并执行自定义方法。
-        
+
         Args:
             **kwargs: 可变关键字参数
                 request_method (str): 方法名
@@ -513,6 +581,6 @@ class WebKeywords:
             # 根据方法名生成类名（下划线命名转为驼峰命名）
             class_name = ''.join(word.capitalize() for word in method.split('_'))
             class_ = getattr(modul, class_name)
-            # 获取并执行方法
-            request_method = class_(self.driver).__getattribute__(method)
+            # 获取并执行方法。扩展类拿到的是 Playwright Page 对象
+            request_method = class_(self.page).__getattribute__(method)
             request_method(**kwargs["step_value"])

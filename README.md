@@ -8,10 +8,10 @@ HAT（Hybrid Automation Testing Framework）是一个基于 Python 与 pytest �
 
 - 支持 YAML、Excel 两种测试用例格式；
 - 基于 pytest 插件完成用例发现与动态参数化；
-- 支持 API 自动化和 Selenium Web UI 自动化；
+- 支持 API 自动化和 Playwright Web UI 自动化；
 - 支持 YAML 数据驱动测试（DDT），一个模板可展开为多个测试场景；
 - 使用 Jinja2 实现跨步骤、跨用例的动态变量渲染；
-- 支持 HTTP Session 和 WebDriver 会话复用；
+- 支持 HTTP Session、浏览器进程与浏览器上下文复用；
 - 支持 JSONPath 响应提取和数据库结果校验；
 - 支持自定义关键字扩展；
 - 支持 AI 自然语言断言与失败自动诊断（可选，未配置大模型 Key 时自动降级为本地规则引擎）；
@@ -25,7 +25,7 @@ HAT（Hybrid Automation Testing Framework）是一个基于 Python 与 pytest �
 | 编程语言   | Python 3               |
 | 测试框架   | pytest                 |
 | API 测试   | requests、jsonpath     |
-| Web 测试   | Selenium               |
+| Web 测试   | Playwright             |
 | 数据解析   | PyYAML、pandas         |
 | 数据库     | PyMySQL                |
 | 模板渲染   | Jinja2                 |
@@ -79,7 +79,7 @@ flowchart LR
 │  │  └─ excel_case_parser.py      # Excel 用例和配置解析
 │  ├─ context/
 │  │  ├─ api_case_context.py       # API Session 生命周期管理
-│  │  └─ web_case_context.py       # WebDriver 生命周期管理
+│  │  └─ web_case_context.py       # Playwright 浏览器与上下文生命周期管理
 │  ├─ keywords/
 │  │  ├─ api_keywords.py           # API、断言及数据库关键字
 │  │  └─ web_keywords.py           # Web、断言及数据库关键字
@@ -103,7 +103,7 @@ flowchart LR
 
 - Python 3.10 或更高版本；
 - Chrome、Firefox 等受支持浏览器；
-- 对应浏览器驱动或 Selenium Grid；
+- 首次使用需执行 `playwright install chromium` 安装浏览器；
 - 如需生成 Allure HTML 报告，需要安装 Java 和 Allure Commandline。
 
 ## 安装
@@ -307,23 +307,23 @@ Web 用例还可以集中维护浏览器和元素定位信息：
 driver_reuse: true
 
 _browser_config:
-  grid_url: ""
-  driver_path: "C:/tools/chromedriver.exe"
-  capability:
-    browser_name: "chrome"
-  options:
-    args:
-      - "--incognito"
+  browser_name: "chromium"   # chromium / firefox / webkit
+  headless: true
+  viewport:
+    width: 1920
+    height: 1080
+  args: []
 
 _all_web_elements:
   login:
-    username_input:
-      locating_method: "By.XPATH"
-      expression: "//input[@name='username']"
-    login_button:
+    username_input: "placeholder=手机号码"              # 方言字符串（推荐）
+    login_button: "role=button[name='登录']"
+    legacy_element:                                     # 旧版字典写法仍兼容
       locating_method: "By.XPATH"
       expression: "//button[@type='submit']"
 ```
+
+定位方言支持：CSS（默认）、`placeholder=`、`role=... [name='..',exact]`、`text=..,exact`、`testid=`、`xpath=`、`tag=`。
 
 实际项目中建议通过环境变量、CI Secret 或密钥管理服务注入账号、密码和 Token，不在用例文件中保存真实凭据。
 
@@ -420,12 +420,16 @@ request_headers:
 | 关键字               | 作用                     |
 | -------------------- | ------------------------ |
 | `open_url`         | 打开页面并截图           |
-| `click_element`    | 等待并点击元素           |
-| `input_text`       | 等待元素可见并输入文本   |
+| `click_element`    | 点击元素（自动等待可见可点） |
+| `input_text`       | 输入文本（fill 语义）     |
+| `hover_element`    | 悬停元素                 |
+| `select_option`    | 下拉框选择               |
+| `wait_for_text`    | 等待页面出现指定文本     |
+| `execute_js`       | 执行 JavaScript，可存变量 |
+| `go_back` / `refresh_page` | 后退 / 刷新页面   |
 | `get_element_data` | 获取元素文本并写入上下文 |
-| `maximize_window`  | 最大化浏览器窗口         |
 | `get_screenshot`   | 将页面截图附加到 Allure  |
-| `quit`             | 关闭 WebDriver           |
+| `quit`             | 关闭当前用例的浏览器上下文 |
 
 ### 断言关键字
 
@@ -445,7 +449,8 @@ request_headers:
 
 | 关键字        | 作用                                                                                |
 | ------------- | ----------------------------------------------------------------------------------- |
-| `ai_assert` | 自然语言断言，用中文描述规则，由大模型判断响应是否满足；未配置 Key 时降级为本地规则 |
+| `ai_assert` | 自然语言断言（API 用例），用中文描述规则，由大模型判断响应是否满足；未配置 Key 时降级为本地规则 |
+| `ai_assert_screenshot` | 自然语言断言（Web 用例），截图交给视觉模型判断；视觉调用失败降级为页面文本判断，无 Key 时降级为本地规则 |
 
 `ai_assert` 参数：
 
@@ -580,7 +585,7 @@ YAML 和 Excel 解析器输出相同的 `case_info` 结构，执行器不需要�
 
 ### 生命周期复用
 
-API Session 和 WebDriver 都支持按配置复用，在连续用例中减少连接或浏览器重复初始化的成本；框架同时注册了退出清理逻辑。
+API Session 和 Playwright 浏览器进程都支持按配置复用；Web 用例每个用例独立 browser context 隔离 cookie 与登录态，框架同时注册了退出清理逻辑。
 
 ### pytest 插件化集成
 
@@ -592,7 +597,7 @@ API Session 和 WebDriver 都支持按配置复用，在连续用例中减少连
 - 设计多数据源到统一领域模型的解析层；
 - 使用关键字驱动降低测试代码与测试数据的耦合；
 - 使用 Jinja2 和上下文对象完成运行期变量传递；
-- 管理 requests Session、Selenium WebDriver 等有状态资源；
+- 管理 requests Session、Playwright 浏览器与上下文等有状态资源；
 - 设计 DDT 场景展开、用例命名和顺序加载策略；
 - 集成数据库校验、日志、截图和 Allure 测试报告；
 - 通过扩展目录为业务项目提供自定义关键字能力；
@@ -604,5 +609,5 @@ API Session 和 WebDriver 都支持按配置复用，在连续用例中减少连
 - 不同环境使用独立配置，并通过环境变量或 CI Secret 注入敏感值；
 - 用例文件和自定义关键字应来自可信来源；
 - 外部服务测试与框架自身单元测试分层运行；
-- Web 测试前确认浏览器、驱动版本及运行平台匹配；
+- Web 测试前确认已执行 `playwright install` 安装对应浏览器；
 - 开启并行执行前，确保用例之间没有隐式顺序依赖。

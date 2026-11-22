@@ -122,6 +122,11 @@ class TestRunner:
                         run_script.exec_script(script, GlobalContext().show_context())
                 except Exception as e:
                     raise RuntimeError(f"执行后置脚本失败: {str(e)}")
+        except Exception:
+            # 失败现场必须在浏览器上下文释放前截取，否则 page 已关闭
+            if web_case_context:
+                web_case_context.capture_failure_screenshot()
+            raise
         finally:
             if web_case_context:
                 web_case_context.release_driver()

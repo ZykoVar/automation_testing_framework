@@ -160,7 +160,7 @@ def has_api_key():
 # 2. 通信层：call_llm
 # ============================================================================
 
-def call_llm(prompt):
+def call_llm(prompt, image_b64=None):
     """调用大模型，返回文本结果。
 
     这是整个项目里唯一一处大模型调用实现，
@@ -170,6 +170,9 @@ def call_llm(prompt):
     由调用方决定降级策略。
 
     :param prompt: 提示词文本
+    :param image_b64: 可选，base64 编码的 PNG 截图。
+                      传入时按多模态消息发送（需要视觉模型），
+                      用于 Web UI 的截图断言场景
     :return: 大模型返回的文本；调用失败或未配置 Key 时返回空字符串
     """
     # 没有 Key 直接返回，交给上层降级
@@ -185,9 +188,19 @@ def call_llm(prompt):
     if not base_url:
         return ""
 
+    # 组装消息体。带截图时按多模态格式发送（OpenAI 兼容协议）
+    if image_b64:
+        content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url",
+             "image_url": {"url": "data:image/png;base64," + image_b64}},
+        ]
+    else:
+        content = prompt
+
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": "user", "content": content}],
         "temperature": 0.2,
         # max_tokens 要留足。推理型模型（reasoning_content）会先消耗一部分
         # token 做思考，max_tokens 给小了会导致正式回答被截断、content 为空。
